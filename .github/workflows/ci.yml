@@ -63,7 +63,7 @@ jobs:
           go-version-file: tools/go.mod
           cache-dependency-path: tools/go.sum
       - run: cd tools && go install github.com/hashicorp/copywrite
-      - run: copywrite headers --check --config .copywrite.hcl
+      - run: copywrite headers --plan --config .copywrite.hcl
 
   govulncheck:
     name: Vulnerability Check
