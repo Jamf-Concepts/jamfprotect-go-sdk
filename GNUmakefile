@@ -15,7 +15,10 @@ fmt:
 test:
 	go test -v -cover -count=1 -timeout=120s ./...
 
+testacc:
+	JAMFPROTECT_ACC=1 go test -v -cover -count=1 -timeout 120m -p=1 ./...
+
 vet:
 	go vet ./...
 
-.PHONY: fmt lint test build generate vet
+.PHONY: fmt lint test testacc build generate vet
