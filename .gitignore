@@ -1,0 +1,45 @@
+# Go Build Artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go build and coverage process
+*.out
+
+# Code coverage profiles
+coverage.*
+*.coverprofile
+profile.cov
+
+# Environment and Configuration
+.env
+.env.*
+
+# Editor/IDE Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS / Linux
+.DS_Store
+**/.DS_Store
+.Trash-*
+*.tmp
+*.bak
+
+# Go workspace
+go.work
+go.work.sum
+
+# Build and Distribution
+dist/
+
+# Logs
+*.log
