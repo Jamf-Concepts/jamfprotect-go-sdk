@@ -1,6 +1,8 @@
 name: Acceptance Tests
 
 on:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: "0 6 * * 1-5" # Weekdays at 06:00 UTC
