@@ -17,7 +17,7 @@ jobs:
     environment: acceptance
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - run: JAMFPROTECT_ACC=1 go test -v -cover -count=1 -timeout 120m -p=1 ./...
