@@ -6,6 +6,8 @@ package jamfprotect
 import (
 	"context"
 	"fmt"
+
+	"github.com/Jamf-Concepts/jamfprotect-go-sdk/internal/client"
 )
 
 const computerFields = `
@@ -139,24 +141,17 @@ type ComputerPlan struct {
 
 // ListComputers retrieves all computers from Jamf Protect.
 func (c *Client) ListComputers(ctx context.Context) ([]Computer, error) {
-	variables := mergeVars(map[string]any{
+	computers, err := client.ListAll[Computer](ctx, c.transport, "/app", listComputersQuery, mergeVars(map[string]any{
 		"isList":    true,
-		"nextToken": nil,
 		"pageSize":  100,
 		"direction": "ASC",
 		"field":     []any{"hostName"},
 		"filter":    nil,
-	}, rbacComputer)
-
-	var resp struct {
-		ListComputers struct {
-			Items []Computer `json:"items"`
-		} `json:"listComputers"`
-	}
-	if err := c.transport.DoGraphQL(ctx, "/app", listComputersQuery, variables, &resp); err != nil {
+	}, rbacComputer), "listComputers")
+	if err != nil {
 		return nil, fmt.Errorf("ListComputers: %w", err)
 	}
-	return resp.ListComputers.Items, nil
+	return computers, nil
 }
 
 // GetComputer retrieves a single computer by UUID from Jamf Protect.
