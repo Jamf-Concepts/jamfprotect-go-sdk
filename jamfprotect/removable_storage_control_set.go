@@ -129,14 +129,12 @@ type RemovableStorageControlSetInput struct {
 }
 
 // RemovableStorageControlRuleInput represents a removable storage control rule input variant.
-// Sub-rule fields must not use omitempty — the GraphQL API requires all four
-// fields to be present (as null for non-matching types).
 type RemovableStorageControlRuleInput struct {
 	Type           string                                     `json:"type"`
-	VendorRule     *RemovableStorageControlRuleDetails        `json:"vendorRule"`
-	SerialRule     *RemovableStorageControlRuleDetails        `json:"serialRule"`
-	ProductRule    *RemovableStorageControlProductRuleDetails `json:"productRule"`
-	EncryptionRule *RemovableStorageControlRuleDetails        `json:"encryptionRule"`
+	VendorRule     *RemovableStorageControlRuleDetails        `json:"vendorRule,omitempty"`
+	SerialRule     *RemovableStorageControlRuleDetails        `json:"serialRule,omitempty"`
+	ProductRule    *RemovableStorageControlProductRuleDetails `json:"productRule,omitempty"`
+	EncryptionRule *RemovableStorageControlRuleDetails        `json:"encryptionRule,omitempty"`
 }
 
 // RemovableStorageControlRuleDetails represents shared rule fields.
