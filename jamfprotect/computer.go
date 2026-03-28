@@ -107,7 +107,7 @@ type Computer struct {
 	OSPatch                 *int64        `json:"osPatch"`
 	Arch                    *string       `json:"arch"`
 	CertID                  *string       `json:"certid"`
-	MemorySize              *int64        `json:"memorySize"`
+	MemorySize              *float64      `json:"memorySize"`
 	OSString                *string       `json:"osString"`
 	KernelVersion           *string       `json:"kernelVersion"`
 	InstallType             *string       `json:"installType"`
