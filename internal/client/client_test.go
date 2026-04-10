@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -101,6 +102,19 @@ func (l *testLogger) responseCount() int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return len(l.responses)
+}
+
+type mockTokenCache struct {
+	loadFn  func(key string) (string, time.Time, bool)
+	storeFn func(key string, token string, expiresAt time.Time) error
+}
+
+func (m *mockTokenCache) Load(key string) (string, time.Time, bool) {
+	return m.loadFn(key)
+}
+
+func (m *mockTokenCache) Store(key string, token string, expiresAt time.Time) error {
+	return m.storeFn(key, token, expiresAt)
 }
 
 func TestNewClient(t *testing.T) {
@@ -663,5 +677,143 @@ func TestClient_Query_NullData(t *testing.T) {
 	err := client.DoGraphQL(context.Background(), "/app", "query { item }", nil, &result)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestClient_TokenCache_LoadHit(t *testing.T) {
+	t.Parallel()
+
+	var tokenCalls int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		tokenCalls++
+		testEncodeJSON(t, w, map[string]any{"access_token": "http-token", "expires_in": 3600})
+	})
+	mux.HandleFunc("/app", func(w http.ResponseWriter, _ *http.Request) {
+		testEncodeJSON(t, w, map[string]any{"data": map[string]any{}})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cache := &mockTokenCache{
+		loadFn: func(_ string) (string, time.Time, bool) {
+			return "cached-token", time.Now().Add(time.Hour), true
+		},
+		storeFn: func(_ string, _ string, _ time.Time) error {
+			return nil
+		},
+	}
+
+	client := NewClientWithUserAgent(srv.URL, "cid", "csecret", "test",
+		WithTokenCache(cache, "test-key"))
+
+	if err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tokenCalls != 0 {
+		t.Errorf("expected 0 token HTTP calls, got %d", tokenCalls)
+	}
+}
+
+func TestClient_TokenCache_LoadMiss(t *testing.T) {
+	t.Parallel()
+
+	var stored bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		testEncodeJSON(t, w, map[string]any{"access_token": "fresh-token", "expires_in": 3600})
+	})
+	mux.HandleFunc("/app", func(w http.ResponseWriter, _ *http.Request) {
+		testEncodeJSON(t, w, map[string]any{"data": map[string]any{}})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cache := &mockTokenCache{
+		loadFn: func(_ string) (string, time.Time, bool) {
+			return "", time.Time{}, false
+		},
+		storeFn: func(_ string, token string, _ time.Time) error {
+			if token != "fresh-token" {
+				t.Errorf("expected Store to receive %q, got %q", "fresh-token", token)
+			}
+			stored = true
+			return nil
+		},
+	}
+
+	client := NewClientWithUserAgent(srv.URL, "cid", "csecret", "test",
+		WithTokenCache(cache, "test-key"))
+
+	if err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !stored {
+		t.Error("expected Store to be called after HTTP fetch")
+	}
+}
+
+func TestClient_TokenCache_StoreErrorIgnored(t *testing.T) {
+	t.Parallel()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		testEncodeJSON(t, w, map[string]any{"access_token": "tok", "expires_in": 3600})
+	})
+	mux.HandleFunc("/app", func(w http.ResponseWriter, _ *http.Request) {
+		testEncodeJSON(t, w, map[string]any{"data": map[string]any{}})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cache := &mockTokenCache{
+		loadFn: func(_ string) (string, time.Time, bool) {
+			return "", time.Time{}, false
+		},
+		storeFn: func(_ string, _ string, _ time.Time) error {
+			return fmt.Errorf("disk full")
+		},
+	}
+
+	client := NewClientWithUserAgent(srv.URL, "cid", "csecret", "test",
+		WithTokenCache(cache, "test-key"))
+
+	if err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, nil); err != nil {
+		t.Fatalf("expected success despite Store error, got: %v", err)
+	}
+}
+
+func TestClient_TokenCache_ExpiredCacheEntry(t *testing.T) {
+	t.Parallel()
+
+	var tokenCalls int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		tokenCalls++
+		testEncodeJSON(t, w, map[string]any{"access_token": "fresh", "expires_in": 3600})
+	})
+	mux.HandleFunc("/app", func(w http.ResponseWriter, _ *http.Request) {
+		testEncodeJSON(t, w, map[string]any{"data": map[string]any{}})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cache := &mockTokenCache{
+		loadFn: func(_ string) (string, time.Time, bool) {
+			return "expired-token", time.Now().Add(-time.Hour), true
+		},
+		storeFn: func(_ string, _ string, _ time.Time) error {
+			return nil
+		},
+	}
+
+	client := NewClientWithUserAgent(srv.URL, "cid", "csecret", "test",
+		WithTokenCache(cache, "test-key"))
+
+	if err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tokenCalls != 1 {
+		t.Errorf("expected 1 token HTTP call for expired cache, got %d", tokenCalls)
 	}
 }

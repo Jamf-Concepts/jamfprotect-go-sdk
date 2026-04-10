@@ -35,6 +35,8 @@ type Client struct {
 	mu          sync.Mutex
 	token       *Token
 	tokenGroup  singleflight.Group
+	tokenCache  TokenCache
+	cacheKey    string
 }
 
 // NewClient creates a new Jamf Protect GraphQL client.
@@ -149,6 +151,16 @@ func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *Client) {
 		if httpClient != nil {
 			c.httpClient = httpClient
+		}
+	}
+}
+
+// WithTokenCache sets a persistent token cache and its lookup key.
+func WithTokenCache(cache TokenCache, cacheKey string) Option {
+	return func(c *Client) {
+		if cache != nil && cacheKey != "" {
+			c.tokenCache = cache
+			c.cacheKey = cacheKey
 		}
 	}
 }

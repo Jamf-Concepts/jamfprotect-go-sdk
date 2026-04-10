@@ -15,6 +15,12 @@ type Logger interface {
 	LogResponse(ctx context.Context, statusCode int, headers http.Header, body []byte)
 }
 
+// TokenCache persists OAuth2 tokens across process restarts.
+type TokenCache interface {
+	Load(key string) (token string, expiresAt time.Time, ok bool)
+	Store(key string, token string, expiresAt time.Time) error
+}
+
 // Token holds an access token and its metadata.
 type Token struct {
 	AccessToken string
