@@ -15,6 +15,12 @@ import (
 
 const tokenExpirySkew = 60 * time.Second
 
+// TokenCache persists OAuth2 tokens across process restarts.
+type TokenCache interface {
+	Load(key string) (token string, expiresAt time.Time, ok bool)
+	Store(key string, token string, expiresAt time.Time) error
+}
+
 // Token holds an access token and its metadata.
 type Token struct {
 	AccessToken string
@@ -60,10 +66,26 @@ func (c *Client) authenticate(ctx context.Context) (*Token, error) {
 		if token := c.currentToken(); token != nil {
 			return token, nil
 		}
+
+		if c.tokenCache != nil {
+			if accessToken, expiresAt, ok := c.tokenCache.Load(c.cacheKey); ok && accessToken != "" && expiresAt.After(time.Now()) {
+				token := &Token{AccessToken: accessToken, Expiry: expiresAt}
+				c.mu.Lock()
+				c.token = token
+				c.mu.Unlock()
+				return token, nil
+			}
+		}
+
 		token, err := c.fetchToken(ctx)
 		if err != nil {
 			return nil, err
 		}
+
+		if c.tokenCache != nil {
+			_ = c.tokenCache.Store(c.cacheKey, token.AccessToken, token.Expiry)
+		}
+
 		c.mu.Lock()
 		c.token = token
 		c.mu.Unlock()
