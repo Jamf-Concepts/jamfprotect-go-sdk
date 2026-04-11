@@ -12,7 +12,7 @@ func TestAcc_AuditLogs_ListByDate(t *testing.T) {
 	client := accClient(t)
 	ctx := context.Background()
 
-	logs, err := client.ListAuditLogsByDate(ctx, 2)
+	logs, err := client.ListAuditLogsByDate(ctx, nil)
 	if err != nil {
 		t.Fatalf("ListAuditLogsByDate: %v", err)
 	}
