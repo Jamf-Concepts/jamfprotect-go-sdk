@@ -55,6 +55,10 @@ fragment ActionConfigsFields on ActionConfigs {
             ... on LogFileClientParams { path permissions maxSizeMB ownership backups }
         }
     }
+    plans {
+        id
+        name
+    }
 }
 `
 
@@ -146,14 +150,21 @@ type ActionConfigInput struct {
 
 // ActionConfig is the API representation of an action configuration.
 type ActionConfig struct {
-	ID          string         `json:"id"`
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Hash        string         `json:"hash"`
-	Created     string         `json:"created"`
-	Updated     string         `json:"updated"`
-	AlertConfig *AlertConfig   `json:"alertConfig"`
-	Clients     []ReportClient `json:"clients"`
+	ID          string             `json:"id"`
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	Hash        string             `json:"hash"`
+	Created     string             `json:"created"`
+	Updated     string             `json:"updated"`
+	AlertConfig *AlertConfig       `json:"alertConfig"`
+	Clients     []ReportClient     `json:"clients"`
+	Plans       []ActionConfigPlan `json:"plans"`
+}
+
+// ActionConfigPlan represents a lightweight plan reference on an action configuration.
+type ActionConfigPlan struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // ActionConfigListItem is the list view for action configurations.

@@ -19,14 +19,17 @@ fragment DataRetentionFields on Organization {
 	retention {
 		database {
 			log {
+				recordCount
 				numberOfDays
 			}
 			alert {
+				recordCount
 				numberOfDays
 			}
 		}
 		cold {
 			alert {
+				recordCount
 				numberOfDays
 			}
 		}
@@ -50,11 +53,11 @@ mutation updateOrganizationRetention($databaseLogDays: Int!, $databaseAlertDays:
 	) {
 		retention {
 			database {
-				log { numberOfDays }
-				alert { numberOfDays }
+				log { recordCount numberOfDays }
+				alert { recordCount numberOfDays }
 			}
 			cold {
-				alert { numberOfDays }
+				alert { recordCount numberOfDays }
 			}
 			updated
 		}
@@ -62,8 +65,9 @@ mutation updateOrganizationRetention($databaseLogDays: Int!, $databaseAlertDays:
 }
 `
 
-// DataRetentionDays represents a retention days object.
+// DataRetentionDays represents a retention record count and days object.
 type DataRetentionDays struct {
+	RecordCount  int64 `json:"recordCount"`
 	NumberOfDays int64 `json:"numberOfDays"`
 }
 

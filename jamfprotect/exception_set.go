@@ -28,6 +28,8 @@ fragment ExceptionSetFields on ExceptionSet {
 				name
 				uuid
 		}
+		created
+		updated
 	}
 	esExceptions @skip(if: $minimal) {
 		type
@@ -40,6 +42,8 @@ fragment ExceptionSetFields on ExceptionSet {
 		ignoreListType
 		ignoreListSubType
 		eventType
+		created
+		updated
 	}
 	created
 	updated
@@ -182,6 +186,8 @@ type Exception struct {
 	AnalyticTypes  []string        `json:"analyticTypes"`
 	AnalyticUuid   string          `json:"analyticUuid"`
 	Analytic       *AnalyticRef    `json:"analytic"`
+	Created        string          `json:"created"`
+	Updated        string          `json:"updated"`
 }
 
 // AnalyticRef represents an analytic reference on an exception.
@@ -199,6 +205,8 @@ type EsException struct {
 	IgnoreListType    string          `json:"ignoreListType"`
 	IgnoreListSubType string          `json:"ignoreListSubType"`
 	EventType         string          `json:"eventType"`
+	Created           string          `json:"created"`
+	Updated           string          `json:"updated"`
 }
 
 // AppSigningInfo represents app signing info in responses.

@@ -39,7 +39,10 @@ fragment ComputerFields on Computer {
         hash
     }
     insightsStatsFail @include(if: $RBAC_Insight)
+    insightsStatsPass @include(if: $RBAC_Insight)
+    insightsStatsUnknown @include(if: $RBAC_Insight)
     insightsUpdated @include(if: $RBAC_Insight)
+    provisioningUDID
     connectionStatus
     lastConnection
     lastConnectionIp
@@ -96,6 +99,37 @@ query getComputer(
 }
 ` + computerFields
 
+const setComputerPlanMutation = `
+mutation setComputerPlan(
+    $uuid: ID!,
+    $plan: ID!,
+    $isList: Boolean = false,
+    $RBAC_ThreatPreventionVersion: Boolean!,
+    $RBAC_Plan: Boolean!,
+    $RBAC_Insight: Boolean!
+) {
+    setComputerPlan(uuid: $uuid, input: {plan: $plan}) {
+        ...ComputerFields
+    }
+}
+` + computerFields
+
+const updateComputerMutation = `
+mutation updateComputer(
+    $uuid: ID!,
+    $label: String,
+    $tags: [String],
+    $isList: Boolean = false,
+    $RBAC_ThreatPreventionVersion: Boolean!,
+    $RBAC_Plan: Boolean!,
+    $RBAC_Insight: Boolean!
+) {
+    updateComputer(uuid: $uuid, input: {label: $label, tags: $tags}) {
+        ...ComputerFields
+    }
+}
+` + computerFields
+
 // Computer represents a computer enrolled in Jamf Protect.
 type Computer struct {
 	UUID                    *string       `json:"uuid"`
@@ -121,7 +155,10 @@ type Computer struct {
 	SignaturesVersion       *int64        `json:"signaturesVersion"`
 	Plan                    *ComputerPlan `json:"plan"`
 	InsightsStatsFail       *int64        `json:"insightsStatsFail"`
+	InsightsStatsPass       *int64        `json:"insightsStatsPass"`
+	InsightsStatsUnknown    *int64        `json:"insightsStatsUnknown"`
 	InsightsUpdated         *string       `json:"insightsUpdated"`
+	ProvisioningUDID        *string       `json:"provisioningUDID"`
 	ConnectionStatus        *string       `json:"connectionStatus"`
 	LastConnection          *string       `json:"lastConnection"`
 	LastConnectionIP        *string       `json:"lastConnectionIp"`
@@ -137,6 +174,12 @@ type ComputerPlan struct {
 	ID   *string `json:"id"`
 	Name *string `json:"name"`
 	Hash *string `json:"hash"`
+}
+
+// ComputerUpdateInput is the update input for a computer.
+type ComputerUpdateInput struct {
+	Label *string
+	Tags  []string
 }
 
 // ListComputers retrieves all computers from Jamf Protect.
@@ -168,4 +211,42 @@ func (c *Client) GetComputer(ctx context.Context, uuid string) (*Computer, error
 		return nil, fmt.Errorf("GetComputer(%s): %w", uuid, err)
 	}
 	return resp.GetComputer, nil
+}
+
+// SetComputerPlan assigns a plan to a computer.
+func (c *Client) SetComputerPlan(ctx context.Context, uuid string, planID string) (*Computer, error) {
+	vars := mergeVars(map[string]any{
+		"uuid": uuid,
+		"plan": planID,
+	}, rbacComputer)
+
+	var resp struct {
+		SetComputerPlan *Computer `json:"setComputerPlan"`
+	}
+	if err := c.transport.DoGraphQL(ctx, "/app", setComputerPlanMutation, vars, &resp); err != nil {
+		return nil, fmt.Errorf("SetComputerPlan(%s): %w", uuid, err)
+	}
+	return resp.SetComputerPlan, nil
+}
+
+// UpdateComputer updates a computer's label and tags.
+func (c *Client) UpdateComputer(ctx context.Context, uuid string, input ComputerUpdateInput) (*Computer, error) {
+	vars := mergeVars(map[string]any{
+		"uuid": uuid,
+	}, rbacComputer)
+
+	if input.Label != nil {
+		vars["label"] = *input.Label
+	}
+	if input.Tags != nil {
+		vars["tags"] = input.Tags
+	}
+
+	var resp struct {
+		UpdateComputer *Computer `json:"updateComputer"`
+	}
+	if err := c.transport.DoGraphQL(ctx, "/app", updateComputerMutation, vars, &resp); err != nil {
+		return nil, fmt.Errorf("UpdateComputer(%s): %w", uuid, err)
+	}
+	return resp.UpdateComputer, nil
 }
