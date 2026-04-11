@@ -136,7 +136,7 @@ func auditLogCondition(dateRange *AuditLogDateRange) map[string]any {
 // consumers can slide it to any period by providing a custom AuditLogDateRange.
 func (c *Client) ListAuditLogsByDate(ctx context.Context, dateRange *AuditLogDateRange) ([]AuditLog, error) {
 	vars := map[string]any{
-		"pageSize":  500,
+		"pageSize":  100,
 		"order":     map[string]any{"direction": "DESC"},
 		"condition": auditLogCondition(dateRange),
 	}
@@ -150,7 +150,7 @@ func (c *Client) ListAuditLogsByDate(ctx context.Context, dateRange *AuditLogDat
 // ListAuditLogsByUser retrieves audit logs filtered by user prefix.
 func (c *Client) ListAuditLogsByUser(ctx context.Context, userPrefix string) ([]AuditLog, error) {
 	vars := map[string]any{
-		"pageSize":  500,
+		"pageSize":  100,
 		"order":     map[string]any{"direction": "DESC"},
 		"condition": map[string]any{"beginsWith": userPrefix},
 	}
@@ -164,7 +164,7 @@ func (c *Client) ListAuditLogsByUser(ctx context.Context, userPrefix string) ([]
 // ListAuditLogsByOp retrieves audit logs filtered by operation prefix.
 func (c *Client) ListAuditLogsByOp(ctx context.Context, opPrefix string) ([]AuditLog, error) {
 	vars := map[string]any{
-		"pageSize":  500,
+		"pageSize":  100,
 		"order":     map[string]any{"direction": "DESC"},
 		"condition": map[string]any{"beginsWith": opPrefix},
 	}
