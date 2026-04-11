@@ -6,7 +6,6 @@ package jamfprotect
 import (
 	"context"
 	"testing"
-	"time"
 )
 
 func TestListAuditLogsByDate_Default(t *testing.T) {
@@ -14,7 +13,6 @@ func TestListAuditLogsByDate_Default(t *testing.T) {
 
 	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
 		t.Helper()
-
 		cond, ok := req.Variables["condition"].(map[string]any)
 		if !ok {
 			t.Fatal("expected condition with date range")
@@ -28,84 +26,63 @@ func TestListAuditLogsByDate_Default(t *testing.T) {
 				"items": []map[string]any{
 					{"resourceId": "res-1", "date": "2026-04-11T12:00:00Z", "args": `{}`, "error": nil, "ips": "10.0.0.1", "op": "createRole", "user": "admin"},
 				},
-				"pageInfo": map[string]any{"next": nil, "total": 1},
+				"pageInfo": map[string]any{"next": nil},
 			},
 		}
 	})
 
 	ctx := context.Background()
-	logs, err := client.ListAuditLogsByDate(ctx, nil)
+	page, err := client.ListAuditLogsByDate(ctx, 100, nil, nil)
 	if err != nil {
 		t.Fatalf("ListAuditLogsByDate: %v", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("expected 1 log, got %d", len(logs))
+	if len(page.Items) != 1 {
+		t.Fatalf("expected 1 log, got %d", len(page.Items))
+	}
+	if page.Next != nil {
+		t.Error("expected nil Next cursor")
 	}
 }
 
-func TestListAuditLogsByDate_CustomRange(t *testing.T) {
+func TestListAuditLogsByDate_Pagination(t *testing.T) {
 	t.Parallel()
 
+	callCount := 0
 	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
 		t.Helper()
-
-		cond := req.Variables["condition"].(map[string]any)
-		dr := cond["dateRange"].(map[string]any)
-		if dr["startDate"] == nil || dr["endDate"] == nil {
-			t.Error("expected start and end dates")
+		callCount++
+		if callCount == 1 {
+			cursor := "page2"
+			return map[string]any{
+				"listAuditLogsByDate": map[string]any{
+					"items":    []map[string]any{{"resourceId": "1", "date": "2026-04-11T12:00:00Z", "args": "{}", "ips": "", "op": "a", "user": "u"}},
+					"pageInfo": map[string]any{"next": cursor},
+				},
+			}
 		}
-
 		return map[string]any{
 			"listAuditLogsByDate": map[string]any{
-				"items":    []map[string]any{},
-				"pageInfo": map[string]any{"next": nil, "total": 0},
+				"items":    []map[string]any{{"resourceId": "2", "date": "2026-04-10T12:00:00Z", "args": "{}", "ips": "", "op": "b", "user": "u"}},
+				"pageInfo": map[string]any{"next": nil},
 			},
 		}
 	})
 
 	ctx := context.Background()
-	end := time.Date(2026, 4, 11, 23, 59, 59, 0, time.UTC)
-	start := end.AddDate(0, 0, -1)
-	logs, err := client.ListAuditLogsByDate(ctx, &AuditLogDateRange{StartDate: start, EndDate: end})
+	p1, err := client.ListAuditLogsByDate(ctx, 1, nil, nil)
 	if err != nil {
-		t.Fatalf("ListAuditLogsByDate: %v", err)
+		t.Fatalf("page 1: %v", err)
 	}
-	if len(logs) != 0 {
-		t.Errorf("expected 0 logs, got %d", len(logs))
+	if p1.Next == nil {
+		t.Fatal("expected cursor on page 1")
 	}
-}
 
-func TestListAuditLogsByDate_ClampedRange(t *testing.T) {
-	t.Parallel()
-
-	var capturedStart string
-	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
-		t.Helper()
-		cond := req.Variables["condition"].(map[string]any)
-		dr := cond["dateRange"].(map[string]any)
-		capturedStart = dr["startDate"].(string)
-
-		return map[string]any{
-			"listAuditLogsByDate": map[string]any{
-				"items":    []map[string]any{},
-				"pageInfo": map[string]any{"next": nil, "total": 0},
-			},
-		}
-	})
-
-	ctx := context.Background()
-	end := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
-	start := end.AddDate(0, 0, -30) // 30 days — should be clamped to 2
-
-	_, err := client.ListAuditLogsByDate(ctx, &AuditLogDateRange{StartDate: start, EndDate: end})
+	p2, err := client.ListAuditLogsByDate(ctx, 1, p1.Next, nil)
 	if err != nil {
-		t.Fatalf("ListAuditLogsByDate: %v", err)
+		t.Fatalf("page 2: %v", err)
 	}
-
-	parsed, _ := time.Parse(time.RFC3339, capturedStart)
-	expected := end.AddDate(0, 0, -MaxAuditLogDays)
-	if !parsed.Equal(expected) {
-		t.Errorf("expected clamped start %v, got %v", expected, parsed)
+	if p2.Next != nil {
+		t.Error("expected nil cursor on page 2")
 	}
 }
 
@@ -119,18 +96,18 @@ func TestListAuditLogsByDate_ErrorField(t *testing.T) {
 				"items": []map[string]any{
 					{"resourceId": "res-1", "date": "2026-04-11T12:00:00Z", "args": `{}`, "error": "Operation Failed: NotFound", "ips": "10.0.0.1", "op": "deleteRole", "user": "admin"},
 				},
-				"pageInfo": map[string]any{"next": nil, "total": 1},
+				"pageInfo": map[string]any{"next": nil},
 			},
 		}
 	})
 
 	ctx := context.Background()
-	logs, err := client.ListAuditLogsByDate(ctx, nil)
+	page, err := client.ListAuditLogsByDate(ctx, 100, nil, nil)
 	if err != nil {
 		t.Fatalf("ListAuditLogsByDate: %v", err)
 	}
-	if logs[0].Error == nil || *logs[0].Error != "Operation Failed: NotFound" {
-		t.Errorf("expected error string, got %v", logs[0].Error)
+	if page.Items[0].Error == nil || *page.Items[0].Error != "Operation Failed: NotFound" {
+		t.Errorf("expected error string, got %v", page.Items[0].Error)
 	}
 }
 
@@ -143,24 +120,23 @@ func TestListAuditLogsByUser(t *testing.T) {
 		if cond["beginsWith"] != "neil" {
 			t.Errorf("expected beginsWith %q, got %v", "neil", cond["beginsWith"])
 		}
-
 		return map[string]any{
 			"listAuditLogsByUser": map[string]any{
 				"items": []map[string]any{
 					{"resourceId": "res-1", "date": "2026-04-11T12:00:00Z", "args": `{}`, "error": nil, "ips": "10.0.0.1", "op": "updateComputer", "user": "neil.martin@jamf.com"},
 				},
-				"pageInfo": map[string]any{"next": nil, "total": 1},
+				"pageInfo": map[string]any{"next": nil},
 			},
 		}
 	})
 
 	ctx := context.Background()
-	logs, err := client.ListAuditLogsByUser(ctx, "neil")
+	page, err := client.ListAuditLogsByUser(ctx, 100, nil, "neil")
 	if err != nil {
 		t.Fatalf("ListAuditLogsByUser: %v", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("expected 1 log, got %d", len(logs))
+	if len(page.Items) != 1 {
+		t.Fatalf("expected 1 log, got %d", len(page.Items))
 	}
 }
 
@@ -173,23 +149,22 @@ func TestListAuditLogsByOp(t *testing.T) {
 		if cond["beginsWith"] != "create" {
 			t.Errorf("expected beginsWith %q, got %v", "create", cond["beginsWith"])
 		}
-
 		return map[string]any{
 			"listAuditLogsByOp": map[string]any{
 				"items": []map[string]any{
 					{"resourceId": "res-1", "date": "2026-04-11T12:00:00Z", "args": `{}`, "error": nil, "ips": "10.0.0.1", "op": "createRole", "user": "admin@clients"},
 				},
-				"pageInfo": map[string]any{"next": nil, "total": 1},
+				"pageInfo": map[string]any{"next": nil},
 			},
 		}
 	})
 
 	ctx := context.Background()
-	logs, err := client.ListAuditLogsByOp(ctx, "create")
+	page, err := client.ListAuditLogsByOp(ctx, 100, nil, "create")
 	if err != nil {
 		t.Fatalf("ListAuditLogsByOp: %v", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("expected 1 log, got %d", len(logs))
+	if len(page.Items) != 1 {
+		t.Fatalf("expected 1 log, got %d", len(page.Items))
 	}
 }
