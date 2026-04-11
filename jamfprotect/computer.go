@@ -99,6 +99,14 @@ query getComputer(
 }
 ` + computerFields
 
+const deleteComputerMutation = `
+mutation deleteComputer($uuid: ID!) {
+    deleteComputer(uuid: $uuid) {
+        uuid
+    }
+}
+`
+
 const setComputerPlanMutation = `
 mutation setComputerPlan(
     $uuid: ID!,
@@ -211,6 +219,15 @@ func (c *Client) GetComputer(ctx context.Context, uuid string) (*Computer, error
 		return nil, fmt.Errorf("GetComputer(%s): %w", uuid, err)
 	}
 	return resp.GetComputer, nil
+}
+
+// DeleteComputer deletes a computer by UUID.
+func (c *Client) DeleteComputer(ctx context.Context, uuid string) error {
+	vars := map[string]any{"uuid": uuid}
+	if err := c.transport.DoGraphQL(ctx, "/app", deleteComputerMutation, vars, nil); err != nil {
+		return fmt.Errorf("DeleteComputer(%s): %w", uuid, err)
+	}
+	return nil
 }
 
 // SetComputerPlan assigns a plan to a computer.

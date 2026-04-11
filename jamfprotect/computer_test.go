@@ -8,6 +8,42 @@ import (
 	"testing"
 )
 
+func TestDeleteComputer(t *testing.T) {
+	t.Parallel()
+
+	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
+		t.Helper()
+
+		if req.Variables["uuid"] != "test-uuid" {
+			t.Errorf("expected uuid %q, got %q", "test-uuid", req.Variables["uuid"])
+		}
+
+		return map[string]any{
+			"deleteComputer": map[string]any{
+				"uuid": "test-uuid",
+			},
+		}
+	})
+
+	ctx := context.Background()
+	err := client.DeleteComputer(ctx, "test-uuid")
+	if err != nil {
+		t.Fatalf("DeleteComputer: %v", err)
+	}
+}
+
+func TestDeleteComputer_Error(t *testing.T) {
+	t.Parallel()
+
+	_, client := testServerError(t, "computer not found")
+
+	ctx := context.Background()
+	err := client.DeleteComputer(ctx, "nonexistent")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
 func TestSetComputerPlan(t *testing.T) {
 	t.Parallel()
 
