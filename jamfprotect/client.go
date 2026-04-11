@@ -5,6 +5,7 @@ package jamfprotect
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/Jamf-Concepts/jamfprotect-go-sdk/internal/client"
@@ -64,6 +65,26 @@ func (c *Client) AccessToken(ctx context.Context) (*Token, error) {
 		TokenType:   t.TokenType,
 		Expiry:      t.Expiry,
 	}, nil
+}
+
+const getCurrentPermissionsQuery = `
+query getCurrentPermissions {
+	getCurrentPermissions {
+		R
+		W
+	}
+}
+`
+
+// GetCurrentPermissions returns the RBAC permissions of the current API client.
+func (c *Client) GetCurrentPermissions(ctx context.Context) (RolePermissions, error) {
+	var result struct {
+		GetCurrentPermissions RolePermissions `json:"getCurrentPermissions"`
+	}
+	if err := c.transport.DoGraphQL(ctx, "/app", getCurrentPermissionsQuery, nil, &result); err != nil {
+		return RolePermissions{}, fmt.Errorf("GetCurrentPermissions: %w", err)
+	}
+	return result.GetCurrentPermissions, nil
 }
 
 // clientConfig holds configuration applied via Option functions.
