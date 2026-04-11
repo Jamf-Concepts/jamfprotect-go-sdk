@@ -247,6 +247,40 @@ func TestUpdateAlerts(t *testing.T) {
 	}
 }
 
+func TestGetAlertStatusCounts(t *testing.T) {
+	t.Parallel()
+
+	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
+		t.Helper()
+		return map[string]any{
+			"getAlertStatusCounts": map[string]any{
+				"New":          12,
+				"InProgress":   3,
+				"Resolved":     45,
+				"AutoResolved": 7,
+			},
+		}
+	})
+
+	ctx := context.Background()
+	counts, err := client.GetAlertStatusCounts(ctx)
+	if err != nil {
+		t.Fatalf("GetAlertStatusCounts: %v", err)
+	}
+	if counts.New != 12 {
+		t.Errorf("expected New=12, got %d", counts.New)
+	}
+	if counts.InProgress != 3 {
+		t.Errorf("expected InProgress=3, got %d", counts.InProgress)
+	}
+	if counts.Resolved != 45 {
+		t.Errorf("expected Resolved=45, got %d", counts.Resolved)
+	}
+	if counts.AutoResolved != 7 {
+		t.Errorf("expected AutoResolved=7, got %d", counts.AutoResolved)
+	}
+}
+
 func TestUpdateAlerts_Error(t *testing.T) {
 	t.Parallel()
 

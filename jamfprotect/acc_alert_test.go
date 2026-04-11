@@ -17,6 +17,14 @@ func TestAcc_Alerts_List(t *testing.T) {
 		t.Fatalf("ListAlerts: %v", err)
 	}
 
+	counts, err := client.GetAlertStatusCounts(ctx)
+	if err != nil {
+		t.Fatalf("GetAlertStatusCounts: %v", err)
+	}
+	total := counts.New + counts.InProgress + counts.Resolved + counts.AutoResolved
+	t.Logf("Alert status counts: New=%d InProgress=%d Resolved=%d AutoResolved=%d (total=%d)",
+		counts.New, counts.InProgress, counts.Resolved, counts.AutoResolved, total)
+
 	// If alerts exist, verify we can get one by UUID.
 	if len(alerts) > 0 {
 		alert, err := client.GetAlert(ctx, alerts[0].UUID)
