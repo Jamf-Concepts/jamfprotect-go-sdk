@@ -130,95 +130,91 @@ func auditLogCondition(dateRange *AuditLogDateRange) map[string]any {
 	}
 }
 
-// AuditLogPage holds a single page of audit log results with a cursor for the next page.
-type AuditLogPage struct {
-	Items []AuditLog
-	Next  *string
+func (c *Client) fetchAllAuditLogs(ctx context.Context, query string, baseVars map[string]any, resultKey string) ([]AuditLog, error) {
+	var allItems []AuditLog
+	var prevCursor string
+
+	vars := make(map[string]any, len(baseVars))
+	for k, v := range baseVars {
+		vars[k] = v
+	}
+
+	for {
+		raw := make(map[string]json.RawMessage)
+		if err := c.transport.DoGraphQL(ctx, "/app", query, vars, &raw); err != nil {
+			return nil, err
+		}
+
+		data, ok := raw[resultKey]
+		if !ok {
+			return nil, fmt.Errorf("response missing expected key %q", resultKey)
+		}
+
+		var page struct {
+			Items    []AuditLog `json:"items"`
+			PageInfo struct {
+				Next *string `json:"next"`
+			} `json:"pageInfo"`
+		}
+		if err := json.Unmarshal(data, &page); err != nil {
+			return nil, fmt.Errorf("decoding %s: %w", resultKey, err)
+		}
+
+		allItems = append(allItems, page.Items...)
+
+		if page.PageInfo.Next == nil {
+			break
+		}
+		if *page.PageInfo.Next == prevCursor {
+			break
+		}
+		prevCursor = *page.PageInfo.Next
+		vars["next"] = *page.PageInfo.Next
+	}
+
+	return allItems, nil
 }
 
-func (c *Client) fetchAuditLogPage(ctx context.Context, query string, vars map[string]any, resultKey string) (AuditLogPage, error) {
-	raw := make(map[string]json.RawMessage)
-	if err := c.transport.DoGraphQL(ctx, "/app", query, vars, &raw); err != nil {
-		return AuditLogPage{}, err
-	}
-
-	data, ok := raw[resultKey]
-	if !ok {
-		return AuditLogPage{}, fmt.Errorf("response missing expected key %q", resultKey)
-	}
-
-	var page struct {
-		Items    []AuditLog `json:"items"`
-		PageInfo struct {
-			Next *string `json:"next"`
-		} `json:"pageInfo"`
-	}
-	if err := json.Unmarshal(data, &page); err != nil {
-		return AuditLogPage{}, fmt.Errorf("decoding %s: %w", resultKey, err)
-	}
-
-	return AuditLogPage{Items: page.Items, Next: page.PageInfo.Next}, nil
-}
-
-// ListAuditLogsByDate retrieves a single page of audit logs within a date range.
-// Pass nil for dateRange to use the default (last 2 days). The window is capped at 2 days;
-// consumers can slide it to any period by providing a custom AuditLogDateRange.
-// Pass nil for nextToken on the first call, then use the returned Next cursor for subsequent pages.
-func (c *Client) ListAuditLogsByDate(ctx context.Context, pageSize int, nextToken *string, dateRange *AuditLogDateRange) (AuditLogPage, error) {
-	if pageSize <= 0 {
-		pageSize = 500
-	}
+// ListAuditLogsByDate retrieves all audit logs within a date range.
+// Pass nil for dateRange to use the default (last 7 days). The window is capped
+// at 7 days; consumers can slide it to any period by providing a custom AuditLogDateRange.
+func (c *Client) ListAuditLogsByDate(ctx context.Context, dateRange *AuditLogDateRange) ([]AuditLog, error) {
 	vars := map[string]any{
-		"pageSize":  pageSize,
+		"pageSize":  500,
 		"order":     map[string]any{"direction": "DESC"},
 		"condition": auditLogCondition(dateRange),
 	}
-	if nextToken != nil {
-		vars["next"] = *nextToken
-	}
-	page, err := c.fetchAuditLogPage(ctx, listAuditLogsByDateQuery, vars, "listAuditLogsByDate")
+	logs, err := c.fetchAllAuditLogs(ctx, listAuditLogsByDateQuery, vars, "listAuditLogsByDate")
 	if err != nil {
-		return AuditLogPage{}, fmt.Errorf("ListAuditLogsByDate: %w", err)
+		return nil, fmt.Errorf("ListAuditLogsByDate: %w", err)
 	}
-	return page, nil
+	return logs, nil
 }
 
-// ListAuditLogsByUser retrieves a single page of audit logs filtered by user prefix.
-func (c *Client) ListAuditLogsByUser(ctx context.Context, pageSize int, nextToken *string, userPrefix string) (AuditLogPage, error) {
-	if pageSize <= 0 {
-		pageSize = 500
-	}
+// ListAuditLogsByUser retrieves all audit logs filtered by user prefix.
+func (c *Client) ListAuditLogsByUser(ctx context.Context, userPrefix string) ([]AuditLog, error) {
 	vars := map[string]any{
-		"pageSize":  pageSize,
+		"pageSize":  500,
 		"order":     map[string]any{"direction": "DESC"},
 		"condition": map[string]any{"beginsWith": userPrefix},
 	}
-	if nextToken != nil {
-		vars["next"] = *nextToken
-	}
-	page, err := c.fetchAuditLogPage(ctx, listAuditLogsByUserQuery, vars, "listAuditLogsByUser")
+	logs, err := c.fetchAllAuditLogs(ctx, listAuditLogsByUserQuery, vars, "listAuditLogsByUser")
 	if err != nil {
-		return AuditLogPage{}, fmt.Errorf("ListAuditLogsByUser: %w", err)
+		return nil, fmt.Errorf("ListAuditLogsByUser: %w", err)
 	}
-	return page, nil
+	return logs, nil
 }
 
-// ListAuditLogsByOp retrieves a single page of audit logs filtered by operation prefix.
-func (c *Client) ListAuditLogsByOp(ctx context.Context, pageSize int, nextToken *string, opPrefix string) (AuditLogPage, error) {
-	if pageSize <= 0 {
-		pageSize = 500
-	}
+// ListAuditLogsByOp retrieves all audit logs filtered by operation prefix.
+func (c *Client) ListAuditLogsByOp(ctx context.Context, opPrefix string) ([]AuditLog, error) {
 	vars := map[string]any{
-		"pageSize":  pageSize,
+		"pageSize":  500,
 		"order":     map[string]any{"direction": "DESC"},
 		"condition": map[string]any{"beginsWith": opPrefix},
 	}
-	if nextToken != nil {
-		vars["next"] = *nextToken
-	}
-	page, err := c.fetchAuditLogPage(ctx, listAuditLogsByOpQuery, vars, "listAuditLogsByOp")
+	logs, err := c.fetchAllAuditLogs(ctx, listAuditLogsByOpQuery, vars, "listAuditLogsByOp")
 	if err != nil {
-		return AuditLogPage{}, fmt.Errorf("ListAuditLogsByOp: %w", err)
+		return nil, fmt.Errorf("ListAuditLogsByOp: %w", err)
 	}
-	return page, nil
+	return logs, nil
 }
