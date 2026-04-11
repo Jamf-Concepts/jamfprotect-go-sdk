@@ -6,6 +6,7 @@ package jamfprotect
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Jamf-Concepts/jamfprotect-go-sdk/internal/client"
 )
@@ -85,6 +86,9 @@ query listAuditLogsByOp(
 }
 ` + auditLogFields
 
+// DefaultAuditLogDays is the default number of days of audit logs to retrieve.
+const DefaultAuditLogDays = 7
+
 // AuditLog represents a single audit log entry.
 type AuditLog struct {
 	ResourceID string  `json:"resourceId"`
@@ -96,26 +100,40 @@ type AuditLog struct {
 	User       string  `json:"user"`
 }
 
-// AuditLogDateCondition filters audit logs by date range.
-type AuditLogDateCondition struct {
-	DateRange *AuditLogDateRange `json:"dateRange,omitempty"`
-}
-
 // AuditLogDateRange specifies start and end dates for filtering.
 type AuditLogDateRange struct {
 	StartDate string `json:"startDate"`
 	EndDate   string `json:"endDate"`
 }
 
-// ListAuditLogsByDate retrieves audit logs ordered by date.
-// Pass nil for condition to list all logs, or provide a date range to filter.
-func (c *Client) ListAuditLogsByDate(ctx context.Context, condition *AuditLogDateCondition) ([]AuditLog, error) {
-	vars := map[string]any{
-		"pageSize": 500,
-		"order":    map[string]any{"direction": "DESC"},
+func defaultDateRange() map[string]any {
+	now := time.Now().UTC()
+	return map[string]any{
+		"dateRange": map[string]any{
+			"startDate": now.AddDate(0, 0, -DefaultAuditLogDays).Format(time.RFC3339),
+			"endDate":   now.Format(time.RFC3339),
+		},
 	}
-	if condition != nil {
-		vars["condition"] = condition
+}
+
+// ListAuditLogsByDate retrieves audit logs within a date range.
+// Pass nil for dateRange to use the default (last 30 days).
+func (c *Client) ListAuditLogsByDate(ctx context.Context, dateRange *AuditLogDateRange) ([]AuditLog, error) {
+	var condition map[string]any
+	if dateRange != nil {
+		condition = map[string]any{
+			"dateRange": map[string]any{
+				"startDate": dateRange.StartDate,
+				"endDate":   dateRange.EndDate,
+			},
+		}
+	} else {
+		condition = defaultDateRange()
+	}
+	vars := map[string]any{
+		"pageSize":  500,
+		"order":     map[string]any{"direction": "DESC"},
+		"condition": condition,
 	}
 	logs, err := client.ListAll[AuditLog](ctx, c.transport, "/app", listAuditLogsByDateQuery, vars, "listAuditLogsByDate")
 	if err != nil {
@@ -124,7 +142,7 @@ func (c *Client) ListAuditLogsByDate(ctx context.Context, condition *AuditLogDat
 	return logs, nil
 }
 
-// ListAuditLogsByUser retrieves audit logs filtered by user prefix.
+// ListAuditLogsByUser retrieves audit logs filtered by user prefix (default last 30 days).
 func (c *Client) ListAuditLogsByUser(ctx context.Context, userPrefix string) ([]AuditLog, error) {
 	vars := map[string]any{
 		"pageSize":  500,
@@ -138,7 +156,7 @@ func (c *Client) ListAuditLogsByUser(ctx context.Context, userPrefix string) ([]
 	return logs, nil
 }
 
-// ListAuditLogsByOp retrieves audit logs filtered by operation prefix.
+// ListAuditLogsByOp retrieves audit logs filtered by operation prefix (default last 30 days).
 func (c *Client) ListAuditLogsByOp(ctx context.Context, opPrefix string) ([]AuditLog, error) {
 	vars := map[string]any{
 		"pageSize":  500,
