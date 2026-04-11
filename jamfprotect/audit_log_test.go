@@ -20,7 +20,6 @@ func TestListAuditLogsByDate_Default(t *testing.T) {
 		if _, ok := cond["dateRange"]; !ok {
 			t.Fatal("expected dateRange in condition")
 		}
-
 		return map[string]any{
 			"listAuditLogsByDate": map[string]any{
 				"items": []map[string]any{
@@ -32,57 +31,42 @@ func TestListAuditLogsByDate_Default(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	page, err := client.ListAuditLogsByDate(ctx, 100, nil, nil)
+	logs, err := client.ListAuditLogsByDate(ctx, nil)
 	if err != nil {
 		t.Fatalf("ListAuditLogsByDate: %v", err)
 	}
-	if len(page.Items) != 1 {
-		t.Fatalf("expected 1 log, got %d", len(page.Items))
-	}
-	if page.Next != nil {
-		t.Error("expected nil Next cursor")
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 log, got %d", len(logs))
 	}
 }
 
-func TestListAuditLogsByDate_Pagination(t *testing.T) {
+func TestListAuditLogsByDate_StopsOnRepeatedCursor(t *testing.T) {
 	t.Parallel()
 
 	callCount := 0
 	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
 		t.Helper()
 		callCount++
-		if callCount == 1 {
-			cursor := "page2"
-			return map[string]any{
-				"listAuditLogsByDate": map[string]any{
-					"items":    []map[string]any{{"resourceId": "1", "date": "2026-04-11T12:00:00Z", "args": "{}", "ips": "", "op": "a", "user": "u"}},
-					"pageInfo": map[string]any{"next": cursor},
-				},
-			}
-		}
 		return map[string]any{
 			"listAuditLogsByDate": map[string]any{
-				"items":    []map[string]any{{"resourceId": "2", "date": "2026-04-10T12:00:00Z", "args": "{}", "ips": "", "op": "b", "user": "u"}},
-				"pageInfo": map[string]any{"next": nil},
+				"items": []map[string]any{
+					{"resourceId": "1", "date": "2026-04-11T12:00:00Z", "args": "{}", "ips": "", "op": "a", "user": "u"},
+				},
+				"pageInfo": map[string]any{"next": "same-cursor-forever"},
 			},
 		}
 	})
 
 	ctx := context.Background()
-	p1, err := client.ListAuditLogsByDate(ctx, 1, nil, nil)
+	logs, err := client.ListAuditLogsByDate(ctx, nil)
 	if err != nil {
-		t.Fatalf("page 1: %v", err)
+		t.Fatalf("ListAuditLogsByDate: %v", err)
 	}
-	if p1.Next == nil {
-		t.Fatal("expected cursor on page 1")
+	if callCount > 2 {
+		t.Errorf("expected pagination to stop on repeated cursor, got %d calls", callCount)
 	}
-
-	p2, err := client.ListAuditLogsByDate(ctx, 1, p1.Next, nil)
-	if err != nil {
-		t.Fatalf("page 2: %v", err)
-	}
-	if p2.Next != nil {
-		t.Error("expected nil cursor on page 2")
+	if len(logs) == 0 {
+		t.Fatal("expected at least some logs")
 	}
 }
 
@@ -102,12 +86,12 @@ func TestListAuditLogsByDate_ErrorField(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	page, err := client.ListAuditLogsByDate(ctx, 100, nil, nil)
+	logs, err := client.ListAuditLogsByDate(ctx, nil)
 	if err != nil {
 		t.Fatalf("ListAuditLogsByDate: %v", err)
 	}
-	if page.Items[0].Error == nil || *page.Items[0].Error != "Operation Failed: NotFound" {
-		t.Errorf("expected error string, got %v", page.Items[0].Error)
+	if logs[0].Error == nil || *logs[0].Error != "Operation Failed: NotFound" {
+		t.Errorf("expected error string, got %v", logs[0].Error)
 	}
 }
 
@@ -131,12 +115,12 @@ func TestListAuditLogsByUser(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	page, err := client.ListAuditLogsByUser(ctx, 100, nil, "neil")
+	logs, err := client.ListAuditLogsByUser(ctx, "neil")
 	if err != nil {
 		t.Fatalf("ListAuditLogsByUser: %v", err)
 	}
-	if len(page.Items) != 1 {
-		t.Fatalf("expected 1 log, got %d", len(page.Items))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 log, got %d", len(logs))
 	}
 }
 
@@ -160,11 +144,11 @@ func TestListAuditLogsByOp(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	page, err := client.ListAuditLogsByOp(ctx, 100, nil, "create")
+	logs, err := client.ListAuditLogsByOp(ctx, "create")
 	if err != nil {
 		t.Fatalf("ListAuditLogsByOp: %v", err)
 	}
-	if len(page.Items) != 1 {
-		t.Fatalf("expected 1 log, got %d", len(page.Items))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 log, got %d", len(logs))
 	}
 }
