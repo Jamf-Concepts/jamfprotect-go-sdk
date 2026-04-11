@@ -12,6 +12,7 @@ import (
 const analyticFields = `
 fragment AnalyticFields on Analytic {
     uuid
+    hash
     name
     label
     inputType
@@ -20,6 +21,7 @@ fragment AnalyticFields on Analytic {
     longDescription
     created
     updated
+    startup
     actions
     analyticActions {
         name
@@ -42,6 +44,7 @@ fragment AnalyticFields on Analytic {
     categories
     jamf
     remediation
+    matchReason
 }
 `
 
@@ -59,7 +62,12 @@ mutation createAnalytic(
     $context: [AnalyticContextInput]!,
     $level: Int!,
     $severity: SEVERITY!,
-    $snapshotFiles: [String]!
+    $snapshotFiles: [String]!,
+    $label: String,
+    $longDescription: String,
+    $startup: Boolean,
+    $remediation: String,
+    $matchReason: String
 ) {
     createAnalytic(input: {
         name: $name,
@@ -73,7 +81,12 @@ mutation createAnalytic(
         context: $context,
         level: $level,
         severity: $severity,
-        snapshotFiles: $snapshotFiles
+        snapshotFiles: $snapshotFiles,
+        label: $label,
+        longDescription: $longDescription,
+        startup: $startup,
+        remediation: $remediation,
+        matchReason: $matchReason
     }) {
         ...AnalyticFields
     }
@@ -104,7 +117,12 @@ mutation updateAnalytic(
     $context: [AnalyticContextInput]!,
     $level: Int!,
     $severity: SEVERITY,
-    $snapshotFiles: [String]!
+    $snapshotFiles: [String]!,
+    $label: String,
+    $longDescription: String,
+    $startup: Boolean,
+    $remediation: String,
+    $matchReason: String
 ) {
     updateAnalytic(uuid: $uuid, input: {
         name: $name,
@@ -118,7 +136,12 @@ mutation updateAnalytic(
         context: $context,
         level: $level,
         severity: $severity,
-        snapshotFiles: $snapshotFiles
+        snapshotFiles: $snapshotFiles,
+        label: $label,
+        longDescription: $longDescription,
+        startup: $startup,
+        remediation: $remediation,
+        matchReason: $matchReason
     }) {
         ...AnalyticFields
     }
@@ -154,6 +177,8 @@ type AnalyticInput struct {
 	Name            string
 	InputType       string
 	Description     string
+	LongDescription string
+	Label           string
 	Actions         []string
 	AnalyticActions []AnalyticActionInput
 	Tags            []string
@@ -163,6 +188,9 @@ type AnalyticInput struct {
 	Level           int64
 	Severity        string
 	SnapshotFiles   []string
+	Startup         *bool
+	Remediation     string
+	MatchReason     string
 }
 
 // AnalyticActionInput represents an analytic action input.
@@ -181,6 +209,7 @@ type AnalyticContextInput struct {
 // Analytic is the API representation of an analytic.
 type Analytic struct {
 	UUID            string            `json:"uuid"`
+	Hash            string            `json:"hash"`
 	Name            string            `json:"name"`
 	Label           string            `json:"label"`
 	InputType       string            `json:"inputType"`
@@ -189,6 +218,7 @@ type Analytic struct {
 	LongDescription string            `json:"longDescription"`
 	Created         string            `json:"created"`
 	Updated         string            `json:"updated"`
+	Startup         bool              `json:"startup"`
 	Actions         []string          `json:"actions"`
 	AnalyticActions []AnalyticAction  `json:"analyticActions"`
 	TenantActions   []AnalyticAction  `json:"tenantActions"`
@@ -201,6 +231,7 @@ type Analytic struct {
 	Categories      []string          `json:"categories"`
 	Jamf            bool              `json:"jamf"`
 	Remediation     string            `json:"remediation"`
+	MatchReason     string            `json:"matchReason"`
 }
 
 // AnalyticAction represents an analytic action.
@@ -218,20 +249,7 @@ type AnalyticContext struct {
 
 // CreateAnalytic creates a new analytic.
 func (c *Client) CreateAnalytic(ctx context.Context, input AnalyticInput) (Analytic, error) {
-	vars := map[string]any{
-		"name":            input.Name,
-		"inputType":       input.InputType,
-		"description":     input.Description,
-		"actions":         input.Actions,
-		"analyticActions": input.AnalyticActions,
-		"tags":            input.Tags,
-		"categories":      input.Categories,
-		"filter":          input.Filter,
-		"context":         input.Context,
-		"level":           input.Level,
-		"severity":        input.Severity,
-		"snapshotFiles":   input.SnapshotFiles,
-	}
+	vars := buildAnalyticVariables(input)
 	var result struct {
 		CreateAnalytic Analytic `json:"createAnalytic"`
 	}
@@ -255,21 +273,8 @@ func (c *Client) GetAnalytic(ctx context.Context, uuid string) (*Analytic, error
 
 // UpdateAnalytic updates an existing analytic.
 func (c *Client) UpdateAnalytic(ctx context.Context, uuid string, input AnalyticInput) (Analytic, error) {
-	vars := map[string]any{
-		"uuid":            uuid,
-		"name":            input.Name,
-		"inputType":       input.InputType,
-		"description":     input.Description,
-		"actions":         input.Actions,
-		"analyticActions": input.AnalyticActions,
-		"tags":            input.Tags,
-		"categories":      input.Categories,
-		"filter":          input.Filter,
-		"context":         input.Context,
-		"level":           input.Level,
-		"severity":        input.Severity,
-		"snapshotFiles":   input.SnapshotFiles,
-	}
+	vars := buildAnalyticVariables(input)
+	vars["uuid"] = uuid
 	var result struct {
 		UpdateAnalytic Analytic `json:"updateAnalytic"`
 	}
@@ -299,4 +304,39 @@ func (c *Client) ListAnalytics(ctx context.Context) ([]Analytic, error) {
 		return nil, fmt.Errorf("ListAnalytics: %w", err)
 	}
 	return result.ListAnalytics.Items, nil
+}
+
+func buildAnalyticVariables(input AnalyticInput) map[string]any {
+	vars := map[string]any{
+		"name":            input.Name,
+		"inputType":       input.InputType,
+		"description":     input.Description,
+		"actions":         input.Actions,
+		"analyticActions": input.AnalyticActions,
+		"tags":            input.Tags,
+		"categories":      input.Categories,
+		"filter":          input.Filter,
+		"context":         input.Context,
+		"level":           input.Level,
+		"severity":        input.Severity,
+		"snapshotFiles":   input.SnapshotFiles,
+	}
+
+	if input.Label != "" {
+		vars["label"] = input.Label
+	}
+	if input.LongDescription != "" {
+		vars["longDescription"] = input.LongDescription
+	}
+	if input.Startup != nil {
+		vars["startup"] = *input.Startup
+	}
+	if input.Remediation != "" {
+		vars["remediation"] = input.Remediation
+	}
+	if input.MatchReason != "" {
+		vars["matchReason"] = input.MatchReason
+	}
+
+	return vars
 }

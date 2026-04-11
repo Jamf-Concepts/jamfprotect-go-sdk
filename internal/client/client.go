@@ -55,8 +55,8 @@ func NewClientWithUserAgent(baseURL, clientID, clientSecret, userAgent string, o
 	rc.HTTPClient.Timeout = 60 * time.Second
 
 	c := &Client{
-		baseURL:   strings.TrimRight(baseURL, "/"),
-		userAgent: userAgent,
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		userAgent:  userAgent,
 		httpClient: rc.StandardClient(),
 		oauthConfig: oauthConfig{
 			ClientID:     clientID,

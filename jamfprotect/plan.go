@@ -13,13 +13,23 @@ import (
 const planFields = `
 fragment PlanFields on Plan {
 	id
+	uuid
 	hash
 	name
 	description
 	created
 	updated
 	logLevel
+	profileVersion
 	autoUpdate
+	threatPreventionStrategy
+	customEngineConfig {
+		MalwareRiskware
+		AdversaryTactics
+		SystemTampering
+		FilelessThreats
+		Experimental
+	}
 	commsConfig {
 		fqdn
 		protocol
@@ -81,7 +91,9 @@ mutation createPlan(
 	$commsConfig: CommsConfigInput!,
 	$infoSync: InfoSyncInput!,
 	$autoUpdate: Boolean!,
-	$signaturesFeedConfig: SignaturesFeedConfigInput!
+	$signaturesFeedConfig: SignaturesFeedConfigInput!,
+	$threatPreventionStrategy: ThreatPreventionStrategy,
+	$customEngineConfig: CustomEngineConfigInput
 ) {
 	createPlan(input: {
 		name: $name,
@@ -96,7 +108,9 @@ mutation createPlan(
 		commsConfig: $commsConfig,
 		infoSync: $infoSync,
 		autoUpdate: $autoUpdate,
-		signaturesFeedConfig: $signaturesFeedConfig
+		signaturesFeedConfig: $signaturesFeedConfig,
+		threatPreventionStrategy: $threatPreventionStrategy,
+		customEngineConfig: $customEngineConfig
 	}) {
 		...PlanFields
 	}
@@ -126,7 +140,9 @@ mutation updatePlan(
 	$commsConfig: CommsConfigInput!,
 	$infoSync: InfoSyncInput!,
 	$autoUpdate: Boolean!,
-	$signaturesFeedConfig: SignaturesFeedConfigInput!
+	$signaturesFeedConfig: SignaturesFeedConfigInput!,
+	$threatPreventionStrategy: ThreatPreventionStrategy,
+	$customEngineConfig: CustomEngineConfigInput
 ) {
 	updatePlan(id: $id, input: {
 		name: $name,
@@ -141,7 +157,9 @@ mutation updatePlan(
 		commsConfig: $commsConfig,
 		infoSync: $infoSync,
 		autoUpdate: $autoUpdate,
-		signaturesFeedConfig: $signaturesFeedConfig
+		signaturesFeedConfig: $signaturesFeedConfig,
+		threatPreventionStrategy: $threatPreventionStrategy,
+		customEngineConfig: $customEngineConfig
 	}) {
 		...PlanFields
 	}
@@ -220,43 +238,67 @@ type PlanConfigProfileOptionsInput struct {
 	ServiceManagement bool
 }
 
+// CustomEngineConfigInput captures per-engine toggle settings for threat prevention.
+type CustomEngineConfigInput struct {
+	MalwareRiskware  string
+	AdversaryTactics string
+	SystemTampering  string
+	FilelessThreats  string
+	Experimental     string
+}
+
 // PlanInput is the create/update input for a plan.
 type PlanInput struct {
-	Name                 string
-	Description          string
-	LogLevel             *string
-	ActionConfigs        string
-	ExceptionSets        []string
-	Telemetry            *string
-	TelemetryV2          *string
-	TelemetryV2Null      bool
-	AnalyticSets         []PlanAnalyticSetInput
-	USBControlSet        *string
-	CommsConfig          PlanCommsConfigInput
-	InfoSync             PlanInfoSyncInput
-	AutoUpdate           bool
-	SignaturesFeedConfig PlanSignaturesFeedConfigInput
+	Name                     string
+	Description              string
+	LogLevel                 *string
+	ActionConfigs            string
+	ExceptionSets            []string
+	Telemetry                *string
+	TelemetryV2              *string
+	TelemetryV2Null          bool
+	AnalyticSets             []PlanAnalyticSetInput
+	USBControlSet            *string
+	CommsConfig              PlanCommsConfigInput
+	InfoSync                 PlanInfoSyncInput
+	AutoUpdate               bool
+	SignaturesFeedConfig     PlanSignaturesFeedConfigInput
+	ThreatPreventionStrategy string
+	CustomEngineConfig       *CustomEngineConfigInput
 }
 
 // Plan represents a Jamf Protect plan.
 type Plan struct {
-	ID                   string              `json:"id"`
-	Hash                 string              `json:"hash"`
-	Name                 string              `json:"name"`
-	Description          string              `json:"description"`
-	Created              string              `json:"created"`
-	Updated              string              `json:"updated"`
-	LogLevel             string              `json:"logLevel"`
-	AutoUpdate           bool                `json:"autoUpdate"`
-	CommsConfig          *PlanCommsConfig    `json:"commsConfig"`
-	InfoSync             *PlanInfoSync       `json:"infoSync"`
-	SignaturesFeedConfig *PlanSignaturesFeed `json:"signaturesFeedConfig"`
-	ActionConfigs        *PlanRef            `json:"actionConfigs"`
-	ExceptionSets        []PlanExceptionSet  `json:"exceptionSets"`
-	USBControlSet        *PlanRef            `json:"usbControlSet"`
-	Telemetry            *PlanRef            `json:"telemetry"`
-	TelemetryV2          *PlanRef            `json:"telemetryV2"`
-	AnalyticSets         []PlanAnalyticSet   `json:"analyticSets"`
+	ID                       string              `json:"id"`
+	UUID                     string              `json:"uuid"`
+	Hash                     string              `json:"hash"`
+	Name                     string              `json:"name"`
+	Description              string              `json:"description"`
+	Created                  string              `json:"created"`
+	Updated                  string              `json:"updated"`
+	LogLevel                 string              `json:"logLevel"`
+	ProfileVersion           int64               `json:"profileVersion"`
+	AutoUpdate               bool                `json:"autoUpdate"`
+	ThreatPreventionStrategy string              `json:"threatPreventionStrategy"`
+	CustomEngineConfig       *CustomEngineConfig `json:"customEngineConfig"`
+	CommsConfig              *PlanCommsConfig    `json:"commsConfig"`
+	InfoSync                 *PlanInfoSync       `json:"infoSync"`
+	SignaturesFeedConfig     *PlanSignaturesFeed `json:"signaturesFeedConfig"`
+	ActionConfigs            *PlanRef            `json:"actionConfigs"`
+	ExceptionSets            []PlanExceptionSet  `json:"exceptionSets"`
+	USBControlSet            *PlanRef            `json:"usbControlSet"`
+	Telemetry                *PlanRef            `json:"telemetry"`
+	TelemetryV2              *PlanRef            `json:"telemetryV2"`
+	AnalyticSets             []PlanAnalyticSet   `json:"analyticSets"`
+}
+
+// CustomEngineConfig represents per-engine threat prevention mode settings.
+type CustomEngineConfig struct {
+	MalwareRiskware  string `json:"MalwareRiskware"`
+	AdversaryTactics string `json:"AdversaryTactics"`
+	SystemTampering  string `json:"SystemTampering"`
+	FilelessThreats  string `json:"FilelessThreats"`
+	Experimental     string `json:"Experimental"`
 }
 
 // PlanCommsConfig represents comms config in a plan.
@@ -427,6 +469,18 @@ func buildPlanVariables(input PlanInput) map[string]any {
 	}
 	if input.USBControlSet != nil {
 		vars["usbControlSet"] = *input.USBControlSet
+	}
+	if input.ThreatPreventionStrategy != "" {
+		vars["threatPreventionStrategy"] = input.ThreatPreventionStrategy
+	}
+	if input.CustomEngineConfig != nil {
+		vars["customEngineConfig"] = map[string]any{
+			"MalwareRiskware":  input.CustomEngineConfig.MalwareRiskware,
+			"AdversaryTactics": input.CustomEngineConfig.AdversaryTactics,
+			"SystemTampering":  input.CustomEngineConfig.SystemTampering,
+			"FilelessThreats":  input.CustomEngineConfig.FilelessThreats,
+			"Experimental":     input.CustomEngineConfig.Experimental,
+		}
 	}
 
 	return vars
