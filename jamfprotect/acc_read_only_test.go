@@ -9,6 +9,20 @@ import (
 	"testing"
 )
 
+func TestAcc_CurrentPermissions(t *testing.T) {
+	client := accClient(t)
+	ctx := context.Background()
+
+	perms, err := client.GetCurrentPermissions(ctx)
+	if err != nil {
+		t.Fatalf("GetCurrentPermissions: %v", err)
+	}
+	if len(perms.Read) == 0 {
+		t.Fatal("GetCurrentPermissions: expected at least one read permission")
+	}
+	t.Logf("Permissions: read=%v write=%v", perms.Read, perms.Write)
+}
+
 func TestAcc_Downloads_Get(t *testing.T) {
 	client := accClient(t)
 	ctx := context.Background()
