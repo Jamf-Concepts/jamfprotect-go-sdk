@@ -84,6 +84,17 @@ query listAlerts(
 }
 ` + alertFields
 
+const getAlertStatusCountsQuery = `
+query getAlertStatusCounts {
+	getAlertStatusCounts {
+		New
+		InProgress
+		Resolved
+		AutoResolved
+	}
+}
+`
+
 const updateAlertsMutation = `
 mutation updateAlerts($uuids: [ID!]!, $status: ALERT_STATUS!) {
 	updateAlerts(input: {uuids: $uuids, status: $status}) {
@@ -155,6 +166,14 @@ type AlertAction struct {
 	Name string `json:"name"`
 }
 
+// AlertStatusCounts holds the count of alerts per status.
+type AlertStatusCounts struct {
+	New          int64 `json:"New"`
+	InProgress   int64 `json:"InProgress"`
+	Resolved     int64 `json:"Resolved"`
+	AutoResolved int64 `json:"AutoResolved"`
+}
+
 // AlertUpdateInput is the input for bulk-updating alert statuses.
 type AlertUpdateInput struct {
 	UUIDs  []string
@@ -183,6 +202,17 @@ func (c *Client) ListAlerts(ctx context.Context) ([]Alert, error) {
 		return nil, fmt.Errorf("ListAlerts: %w", err)
 	}
 	return alerts, nil
+}
+
+// GetAlertStatusCounts returns the count of alerts grouped by status.
+func (c *Client) GetAlertStatusCounts(ctx context.Context) (AlertStatusCounts, error) {
+	var result struct {
+		GetAlertStatusCounts AlertStatusCounts `json:"getAlertStatusCounts"`
+	}
+	if err := c.transport.DoGraphQL(ctx, "/app", getAlertStatusCountsQuery, nil, &result); err != nil {
+		return AlertStatusCounts{}, fmt.Errorf("GetAlertStatusCounts: %w", err)
+	}
+	return result.GetAlertStatusCounts, nil
 }
 
 // UpdateAlerts bulk-updates the status of one or more alerts.
