@@ -166,7 +166,7 @@ func (c *Client) fetchAuditLogPage(ctx context.Context, query string, vars map[s
 // Pass nil for nextToken on the first call, then use the returned Next cursor for subsequent pages.
 func (c *Client) ListAuditLogsByDate(ctx context.Context, pageSize int, nextToken *string, dateRange *AuditLogDateRange) (AuditLogPage, error) {
 	if pageSize <= 0 {
-		pageSize = 100
+		pageSize = 500
 	}
 	vars := map[string]any{
 		"pageSize":  pageSize,
@@ -186,7 +186,7 @@ func (c *Client) ListAuditLogsByDate(ctx context.Context, pageSize int, nextToke
 // ListAuditLogsByUser retrieves a single page of audit logs filtered by user prefix.
 func (c *Client) ListAuditLogsByUser(ctx context.Context, pageSize int, nextToken *string, userPrefix string) (AuditLogPage, error) {
 	if pageSize <= 0 {
-		pageSize = 100
+		pageSize = 500
 	}
 	vars := map[string]any{
 		"pageSize":  pageSize,
@@ -206,7 +206,7 @@ func (c *Client) ListAuditLogsByUser(ctx context.Context, pageSize int, nextToke
 // ListAuditLogsByOp retrieves a single page of audit logs filtered by operation prefix.
 func (c *Client) ListAuditLogsByOp(ctx context.Context, pageSize int, nextToken *string, opPrefix string) (AuditLogPage, error) {
 	if pageSize <= 0 {
-		pageSize = 100
+		pageSize = 500
 	}
 	vars := map[string]any{
 		"pageSize":  pageSize,
