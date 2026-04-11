@@ -12,7 +12,7 @@ The module path is `github.com/Jamf-Concepts/jamfprotect-go-sdk`.
 
 The SDK has two layers:
 
-- **`jamfprotect` (exported)** — Public API. Provides a `Client` with typed CRUD methods for each Jamf Protect resource (plans, analytics, roles, groups, etc.). Consumers import only this package.
+- **`jamfprotect` (exported)** — Public API. Provides a `Client` with typed methods for each Jamf Protect resource. Consumers import only this package.
 - **`internal/client`** — GraphQL transport, OAuth2 token management, pagination, error handling. Not importable by external consumers.
 
 The transport client handles:
@@ -58,6 +58,20 @@ func (c *Client) ListRoles(ctx context.Context) ([]Role, error)
 
 Each resource file contains GraphQL queries/mutations as constants, Go types for request/response payloads, and the CRUD method implementations. GraphQL fragments are appended to query constants for field reuse.
 
+### Resource Coverage
+
+**Full CRUD:** ActionConfig, Analytic, AnalyticSet, ApiClient, CustomPreventList, ExceptionSet, Group, Plan, RemovableStorageControlSet, Role, TelemetryV2, UnifiedLoggingFilter, User
+
+**Read + Write (partial):** Computer (list, get, update, delete, setComputerPlan), Connection (list-only), DataForwarding (get/update), DataRetention (get/update), ChangeManagement (get/update), Downloads (get-only)
+
+**Alerts:** GetAlert, ListAlerts, UpdateAlerts (bulk status), GetAlertStatusCounts
+
+**Insights/Compliance:** ListInsights, UpdateInsightStatus, ListInsightComputers, GetFleetComplianceScore
+
+**Audit Logs:** ListAuditLogsByDate (2-day max sliding window), ListAuditLogsByUser, ListAuditLogsByOp
+
+**Auth:** GetCurrentPermissions (RBAC introspection)
+
 ## RBAC Variables
 
 Some GraphQL queries require RBAC permission-scoping variables (e.g., `RBAC_Connection`, `RBAC_Role`, `RBAC_Plan`). These are merged into query variables using `mergeVars()`.
@@ -67,3 +81,9 @@ Some GraphQL queries require RBAC permission-scoping variables (e.g., `RBAC_Conn
 - `JAMFPROTECT_URL` — Base URL (e.g., `https://your-tenant.protect.jamfcloud.com`)
 - `JAMFPROTECT_CLIENT_ID` — API client ID
 - `JAMFPROTECT_CLIENT_SECRET` — API client secret
+
+Acceptance tests use `JAMFPROTECT_BASE_URL` (not `JAMFPROTECT_URL`) plus `JAMFPROTECT_CLIENT_ID` and `JAMFPROTECT_CLIENT_SECRET`.
+
+## Schema
+
+The GraphQL schema is at `bin/schema.graphql`. The audit of SDK coverage against the schema is at `bin/AUDIT.md`.
