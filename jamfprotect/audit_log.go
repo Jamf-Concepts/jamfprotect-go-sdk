@@ -43,47 +43,6 @@ query listAuditLogsByDate(
 }
 ` + auditLogFields
 
-const listAuditLogsByUserQuery = `
-query listAuditLogsByUser(
-	$next: String,
-	$pageSize: Int,
-	$order: AuditLogsOrderInput,
-	$condition: AuditLogsUserConditionInput
-) {
-	listAuditLogsByUser(
-		input: {next: $next, pageSize: $pageSize, order: $order, condition: $condition}
-	) {
-		items {
-			...AuditLogFields
-		}
-		pageInfo {
-			next
-			total
-		}
-	}
-}
-` + auditLogFields
-
-const listAuditLogsByOpQuery = `
-query listAuditLogsByOp(
-	$next: String,
-	$pageSize: Int,
-	$order: AuditLogsOrderInput,
-	$condition: AuditLogsOpConditionInput
-) {
-	listAuditLogsByOp(
-		input: {next: $next, pageSize: $pageSize, order: $order, condition: $condition}
-	) {
-		items {
-			...AuditLogFields
-		}
-		pageInfo {
-			next
-			total
-		}
-	}
-}
-` + auditLogFields
 
 // MaxAuditLogDays is the maximum window size enforced by the SDK.
 const MaxAuditLogDays = 7
@@ -191,30 +150,3 @@ func (c *Client) ListAuditLogsByDate(ctx context.Context, dateRange *AuditLogDat
 	return logs, nil
 }
 
-// ListAuditLogsByUser retrieves all audit logs filtered by user prefix.
-func (c *Client) ListAuditLogsByUser(ctx context.Context, userPrefix string) ([]AuditLog, error) {
-	vars := map[string]any{
-		"pageSize":  500,
-		"order":     map[string]any{"direction": "DESC"},
-		"condition": map[string]any{"beginsWith": userPrefix},
-	}
-	logs, err := c.fetchAllAuditLogs(ctx, listAuditLogsByUserQuery, vars, "listAuditLogsByUser")
-	if err != nil {
-		return nil, fmt.Errorf("ListAuditLogsByUser: %w", err)
-	}
-	return logs, nil
-}
-
-// ListAuditLogsByOp retrieves all audit logs filtered by operation prefix.
-func (c *Client) ListAuditLogsByOp(ctx context.Context, opPrefix string) ([]AuditLog, error) {
-	vars := map[string]any{
-		"pageSize":  500,
-		"order":     map[string]any{"direction": "DESC"},
-		"condition": map[string]any{"beginsWith": opPrefix},
-	}
-	logs, err := c.fetchAllAuditLogs(ctx, listAuditLogsByOpQuery, vars, "listAuditLogsByOp")
-	if err != nil {
-		return nil, fmt.Errorf("ListAuditLogsByOp: %w", err)
-	}
-	return logs, nil
-}

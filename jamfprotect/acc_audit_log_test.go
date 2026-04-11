@@ -21,25 +21,3 @@ func TestAcc_AuditLogs_ListByDate(t *testing.T) {
 	}
 	t.Logf("ListAuditLogsByDate: %d entries", len(logs))
 }
-
-func TestAcc_AuditLogs_ListByOp(t *testing.T) {
-	client := accClient(t)
-	ctx := context.Background()
-
-	logs, err := client.ListAuditLogsByOp(ctx, "create")
-	if err != nil {
-		t.Fatalf("ListAuditLogsByOp: %v", err)
-	}
-	t.Logf("ListAuditLogsByOp(create): %d entries", len(logs))
-}
-
-func TestAcc_AuditLogs_ListByUser(t *testing.T) {
-	client := accClient(t)
-	ctx := context.Background()
-
-	logs, err := client.ListAuditLogsByUser(ctx, "7UBMO52m")
-	if err != nil {
-		t.Fatalf("ListAuditLogsByUser: %v", err)
-	}
-	t.Logf("ListAuditLogsByUser(7UBMO52m): %d entries", len(logs))
-}
