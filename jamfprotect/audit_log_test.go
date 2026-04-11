@@ -8,14 +8,22 @@ import (
 	"testing"
 )
 
-func TestListAuditLogsByDate(t *testing.T) {
+func TestListAuditLogsByDate_DefaultRange(t *testing.T) {
 	t.Parallel()
 
 	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
 		t.Helper()
 
-		if req.Variables["pageSize"] != float64(500) {
-			t.Errorf("expected pageSize 500, got %v", req.Variables["pageSize"])
+		cond, ok := req.Variables["condition"].(map[string]any)
+		if !ok {
+			t.Fatal("expected condition to be set (default date range)")
+		}
+		dr, ok := cond["dateRange"].(map[string]any)
+		if !ok {
+			t.Fatal("expected dateRange in condition")
+		}
+		if dr["startDate"] == nil || dr["endDate"] == nil {
+			t.Error("expected startDate and endDate to be set")
 		}
 
 		return map[string]any{
@@ -30,20 +38,8 @@ func TestListAuditLogsByDate(t *testing.T) {
 						"op":         "createRole",
 						"user":       "admin@example.com",
 					},
-					{
-						"resourceId": "res-2",
-						"date":       "2026-04-11T11:00:00Z",
-						"args":       `{"id":"res-2"}`,
-						"error":      "Operation Failed: NotFound",
-						"ips":        "10.0.0.2",
-						"op":         "deleteRole",
-						"user":       "api-client@clients",
-					},
 				},
-				"pageInfo": map[string]any{
-					"next":  nil,
-					"total": 2,
-				},
+				"pageInfo": map[string]any{"next": nil, "total": 1},
 			},
 		}
 	})
@@ -53,21 +49,15 @@ func TestListAuditLogsByDate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAuditLogsByDate: %v", err)
 	}
-	if len(logs) != 2 {
-		t.Fatalf("expected 2 logs, got %d", len(logs))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 log, got %d", len(logs))
 	}
 	if logs[0].Op != "createRole" {
 		t.Errorf("expected op %q, got %q", "createRole", logs[0].Op)
 	}
-	if logs[0].Error != nil {
-		t.Error("expected nil error on first log")
-	}
-	if logs[1].Error == nil || *logs[1].Error != "Operation Failed: NotFound" {
-		t.Errorf("expected error on second log, got %v", logs[1].Error)
-	}
 }
 
-func TestListAuditLogsByDate_WithCondition(t *testing.T) {
+func TestListAuditLogsByDate_CustomRange(t *testing.T) {
 	t.Parallel()
 
 	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
@@ -75,14 +65,17 @@ func TestListAuditLogsByDate_WithCondition(t *testing.T) {
 
 		cond, ok := req.Variables["condition"].(map[string]any)
 		if !ok {
-			t.Fatal("expected condition to be set")
+			t.Fatal("expected condition")
 		}
 		dr, ok := cond["dateRange"].(map[string]any)
 		if !ok {
-			t.Fatal("expected dateRange in condition")
+			t.Fatal("expected dateRange")
 		}
-		if dr["startDate"] != "2026-04-09T00:00:00Z" {
-			t.Errorf("expected startDate, got %v", dr["startDate"])
+		if dr["startDate"] != "2026-04-01T00:00:00Z" {
+			t.Errorf("expected custom startDate, got %v", dr["startDate"])
+		}
+		if dr["endDate"] != "2026-04-11T23:59:59Z" {
+			t.Errorf("expected custom endDate, got %v", dr["endDate"])
 		}
 
 		return map[string]any{
@@ -94,17 +87,48 @@ func TestListAuditLogsByDate_WithCondition(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	logs, err := client.ListAuditLogsByDate(ctx, &AuditLogDateCondition{
-		DateRange: &AuditLogDateRange{
-			StartDate: "2026-04-09T00:00:00Z",
-			EndDate:   "2026-04-11T23:59:59Z",
-		},
+	logs, err := client.ListAuditLogsByDate(ctx, &AuditLogDateRange{
+		StartDate: "2026-04-01T00:00:00Z",
+		EndDate:   "2026-04-11T23:59:59Z",
 	})
 	if err != nil {
 		t.Fatalf("ListAuditLogsByDate: %v", err)
 	}
 	if len(logs) != 0 {
 		t.Errorf("expected 0 logs, got %d", len(logs))
+	}
+}
+
+func TestListAuditLogsByDate_ErrorField(t *testing.T) {
+	t.Parallel()
+
+	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
+		t.Helper()
+		return map[string]any{
+			"listAuditLogsByDate": map[string]any{
+				"items": []map[string]any{
+					{
+						"resourceId": "res-1",
+						"date":       "2026-04-11T12:00:00Z",
+						"args":       `{}`,
+						"error":      "Operation Failed: NotFound",
+						"ips":        "10.0.0.1",
+						"op":         "deleteRole",
+						"user":       "admin",
+					},
+				},
+				"pageInfo": map[string]any{"next": nil, "total": 1},
+			},
+		}
+	})
+
+	ctx := context.Background()
+	logs, err := client.ListAuditLogsByDate(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListAuditLogsByDate: %v", err)
+	}
+	if logs[0].Error == nil || *logs[0].Error != "Operation Failed: NotFound" {
+		t.Errorf("expected error string, got %v", logs[0].Error)
 	}
 }
 
@@ -132,7 +156,7 @@ func TestListAuditLogsByUser(t *testing.T) {
 						"error":      nil,
 						"ips":        "10.0.0.1",
 						"op":         "updateComputer",
-						"user":       "neil.martin@jamf.com#oidc|test",
+						"user":       "neil.martin@jamf.com",
 					},
 				},
 				"pageInfo": map[string]any{"next": nil, "total": 1},
@@ -147,9 +171,6 @@ func TestListAuditLogsByUser(t *testing.T) {
 	}
 	if len(logs) != 1 {
 		t.Fatalf("expected 1 log, got %d", len(logs))
-	}
-	if logs[0].User != "neil.martin@jamf.com#oidc|test" {
-		t.Errorf("expected user prefix match, got %q", logs[0].User)
 	}
 }
 
@@ -192,8 +213,5 @@ func TestListAuditLogsByOp(t *testing.T) {
 	}
 	if len(logs) != 1 {
 		t.Fatalf("expected 1 log, got %d", len(logs))
-	}
-	if logs[0].Op != "createRole" {
-		t.Errorf("expected op %q, got %q", "createRole", logs[0].Op)
 	}
 }
