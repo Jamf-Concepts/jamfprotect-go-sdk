@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestListAuditLogsByDate_DefaultRange(t *testing.T) {
+func TestListAuditLogsByDate_Default(t *testing.T) {
 	t.Parallel()
 
 	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
@@ -16,14 +16,14 @@ func TestListAuditLogsByDate_DefaultRange(t *testing.T) {
 
 		cond, ok := req.Variables["condition"].(map[string]any)
 		if !ok {
-			t.Fatal("expected condition to be set (default date range)")
+			t.Fatal("expected condition with date range")
 		}
 		dr, ok := cond["dateRange"].(map[string]any)
 		if !ok {
 			t.Fatal("expected dateRange in condition")
 		}
 		if dr["startDate"] == nil || dr["endDate"] == nil {
-			t.Error("expected startDate and endDate to be set")
+			t.Error("expected startDate and endDate")
 		}
 
 		return map[string]any{
@@ -45,7 +45,7 @@ func TestListAuditLogsByDate_DefaultRange(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	logs, err := client.ListAuditLogsByDate(ctx, nil)
+	logs, err := client.ListAuditLogsByDate(ctx, 0)
 	if err != nil {
 		t.Fatalf("ListAuditLogsByDate: %v", err)
 	}
@@ -57,27 +57,11 @@ func TestListAuditLogsByDate_DefaultRange(t *testing.T) {
 	}
 }
 
-func TestListAuditLogsByDate_CustomRange(t *testing.T) {
+func TestListAuditLogsByDate_CustomDays(t *testing.T) {
 	t.Parallel()
 
 	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
 		t.Helper()
-
-		cond, ok := req.Variables["condition"].(map[string]any)
-		if !ok {
-			t.Fatal("expected condition")
-		}
-		dr, ok := cond["dateRange"].(map[string]any)
-		if !ok {
-			t.Fatal("expected dateRange")
-		}
-		if dr["startDate"] != "2026-04-01T00:00:00Z" {
-			t.Errorf("expected custom startDate, got %v", dr["startDate"])
-		}
-		if dr["endDate"] != "2026-04-11T23:59:59Z" {
-			t.Errorf("expected custom endDate, got %v", dr["endDate"])
-		}
-
 		return map[string]any{
 			"listAuditLogsByDate": map[string]any{
 				"items":    []map[string]any{},
@@ -87,10 +71,7 @@ func TestListAuditLogsByDate_CustomRange(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	logs, err := client.ListAuditLogsByDate(ctx, &AuditLogDateRange{
-		StartDate: "2026-04-01T00:00:00Z",
-		EndDate:   "2026-04-11T23:59:59Z",
-	})
+	logs, err := client.ListAuditLogsByDate(ctx, 90)
 	if err != nil {
 		t.Fatalf("ListAuditLogsByDate: %v", err)
 	}
@@ -123,7 +104,7 @@ func TestListAuditLogsByDate_ErrorField(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	logs, err := client.ListAuditLogsByDate(ctx, nil)
+	logs, err := client.ListAuditLogsByDate(ctx, 0)
 	if err != nil {
 		t.Fatalf("ListAuditLogsByDate: %v", err)
 	}
