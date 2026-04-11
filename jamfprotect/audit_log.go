@@ -86,8 +86,8 @@ query listAuditLogsByOp(
 }
 ` + auditLogFields
 
-// DefaultAuditLogDays is the default number of days of audit logs to retrieve.
-const DefaultAuditLogDays = 7
+// MaxAuditLogDays is the maximum window size enforced by the SDK.
+const MaxAuditLogDays = 2
 
 // AuditLog represents a single audit log entry.
 type AuditLog struct {
@@ -100,26 +100,45 @@ type AuditLog struct {
 	User       string  `json:"user"`
 }
 
-func dateRangeCondition(days int) map[string]any {
-	if days <= 0 {
-		days = DefaultAuditLogDays
+// AuditLogDateRange specifies start and end dates for filtering audit logs.
+// The SDK enforces a maximum window of 2 days. If the range exceeds this,
+// the start date is clamped to 2 days before the end date.
+type AuditLogDateRange struct {
+	StartDate time.Time
+	EndDate   time.Time
+}
+
+func auditLogCondition(dateRange *AuditLogDateRange) map[string]any {
+	var start, end time.Time
+	if dateRange != nil {
+		start = dateRange.StartDate
+		end = dateRange.EndDate
+	} else {
+		end = time.Now().UTC()
+		start = end.AddDate(0, 0, -MaxAuditLogDays)
 	}
-	now := time.Now().UTC()
+
+	maxStart := end.AddDate(0, 0, -MaxAuditLogDays)
+	if start.Before(maxStart) {
+		start = maxStart
+	}
+
 	return map[string]any{
 		"dateRange": map[string]any{
-			"startDate": now.AddDate(0, 0, -days).Format(time.RFC3339),
-			"endDate":   now.Format(time.RFC3339),
+			"startDate": start.Format(time.RFC3339),
+			"endDate":   end.Format(time.RFC3339),
 		},
 	}
 }
 
-// ListAuditLogsByDate retrieves audit logs within the last N days.
-// Pass 0 to use the default (last 7 days).
-func (c *Client) ListAuditLogsByDate(ctx context.Context, days int) ([]AuditLog, error) {
+// ListAuditLogsByDate retrieves audit logs within a date range.
+// Pass nil for the default (last 2 days). The window is capped at 2 days;
+// consumers can slide it to any period by providing a custom AuditLogDateRange.
+func (c *Client) ListAuditLogsByDate(ctx context.Context, dateRange *AuditLogDateRange) ([]AuditLog, error) {
 	vars := map[string]any{
 		"pageSize":  500,
 		"order":     map[string]any{"direction": "DESC"},
-		"condition": dateRangeCondition(days),
+		"condition": auditLogCondition(dateRange),
 	}
 	logs, err := client.ListAll[AuditLog](ctx, c.transport, "/app", listAuditLogsByDateQuery, vars, "listAuditLogsByDate")
 	if err != nil {
@@ -128,7 +147,7 @@ func (c *Client) ListAuditLogsByDate(ctx context.Context, days int) ([]AuditLog,
 	return logs, nil
 }
 
-// ListAuditLogsByUser retrieves audit logs filtered by user prefix (default last 30 days).
+// ListAuditLogsByUser retrieves audit logs filtered by user prefix.
 func (c *Client) ListAuditLogsByUser(ctx context.Context, userPrefix string) ([]AuditLog, error) {
 	vars := map[string]any{
 		"pageSize":  500,
@@ -142,7 +161,7 @@ func (c *Client) ListAuditLogsByUser(ctx context.Context, userPrefix string) ([]
 	return logs, nil
 }
 
-// ListAuditLogsByOp retrieves audit logs filtered by operation prefix (default last 30 days).
+// ListAuditLogsByOp retrieves audit logs filtered by operation prefix.
 func (c *Client) ListAuditLogsByOp(ctx context.Context, opPrefix string) ([]AuditLog, error) {
 	vars := map[string]any{
 		"pageSize":  500,
