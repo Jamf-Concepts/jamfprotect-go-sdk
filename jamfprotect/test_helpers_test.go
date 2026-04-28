@@ -30,7 +30,7 @@ func testServer(t *testing.T, graphqlHandler func(t *testing.T, req graphqlReque
 			t.Fatalf("encoding token response: %v", err)
 		}
 	})
-	mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
+	graphqlEndpoint := func(w http.ResponseWriter, r *http.Request) {
 		var req graphqlRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decoding graphql request: %v", err)
@@ -41,7 +41,9 @@ func testServer(t *testing.T, graphqlHandler func(t *testing.T, req graphqlReque
 		if err := json.NewEncoder(w).Encode(map[string]any{"data": data}); err != nil {
 			t.Fatalf("encoding graphql response: %v", err)
 		}
-	})
+	}
+	mux.HandleFunc("/app", graphqlEndpoint)
+	mux.HandleFunc("/graphql", graphqlEndpoint)
 
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -67,7 +69,7 @@ func testServerError(t *testing.T, message string) (*httptest.Server, *Client) {
 			t.Fatalf("encoding token response: %v", err)
 		}
 	})
-	mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
+	errorEndpoint := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]any{
 			"data":   nil,
@@ -75,7 +77,9 @@ func testServerError(t *testing.T, message string) (*httptest.Server, *Client) {
 		}); err != nil {
 			t.Fatalf("encoding graphql response: %v", err)
 		}
-	})
+	}
+	mux.HandleFunc("/app", errorEndpoint)
+	mux.HandleFunc("/graphql", errorEndpoint)
 
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
