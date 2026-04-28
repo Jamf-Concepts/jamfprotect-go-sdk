@@ -61,6 +61,21 @@ func TestAcc_Computers_List(t *testing.T) {
 	}
 }
 
+func TestAcc_BetaAcceptanceStatus_Get(t *testing.T) {
+	client := accClient(t)
+	ctx := context.Background()
+
+	// Beta acceptance may be empty on tenants that have not opted in — call must succeed either way.
+	statuses, err := client.GetBetaAcceptanceStatus(ctx)
+	if err != nil {
+		t.Fatalf("GetBetaAcceptanceStatus: %v", err)
+	}
+	t.Logf("BetaAcceptanceStatus: %d record(s)", len(statuses))
+	for _, s := range statuses {
+		t.Logf("  betaName=%s acceptedUser=%s acceptedTimestamp=%s", s.BetaName, s.AcceptedUser, s.AcceptedTimestamp)
+	}
+}
+
 func TestAcc_FileTokenCache(t *testing.T) {
 	t.Helper()
 
