@@ -148,6 +148,22 @@ mutation updateAnalytic(
 }
 ` + analyticFields
 
+// updateInternalAnalyticMutation defines the GraphQL mutation for updating tenant-scoped fields on a Jamf-managed analytic.
+const updateInternalAnalyticMutation = `
+mutation updateInternalAnalytic(
+    $uuid: ID!,
+    $tenantActions: [AnalyticActionsInput],
+    $tenantSeverity: SEVERITY
+) {
+    updateInternalAnalytic(uuid: $uuid, input: {
+        tenantActions: $tenantActions,
+        tenantSeverity: $tenantSeverity
+    }) {
+        ...AnalyticFields
+    }
+}
+` + analyticFields
+
 // deleteAnalyticMutation defines the GraphQL mutation for deleting an analytic by UUID.
 const deleteAnalyticMutation = `
 mutation deleteAnalytic($uuid: ID!) {
@@ -171,6 +187,12 @@ query listAnalytics {
     }
 }
 ` + analyticFields
+
+// InternalAnalyticInput is the update input for tenant-scoped fields on a Jamf-managed analytic.
+type InternalAnalyticInput struct {
+	TenantActions  []AnalyticActionInput
+	TenantSeverity string
+}
 
 // AnalyticInput is the create/update input for an analytic.
 type AnalyticInput struct {
@@ -282,6 +304,24 @@ func (c *Client) UpdateAnalytic(ctx context.Context, uuid string, input Analytic
 		return Analytic{}, fmt.Errorf("UpdateAnalytic(%s): %w", uuid, err)
 	}
 	return result.UpdateAnalytic, nil
+}
+
+// UpdateInternalAnalytic updates tenant-scoped fields on a Jamf-managed analytic.
+func (c *Client) UpdateInternalAnalytic(ctx context.Context, uuid string, input InternalAnalyticInput) (Analytic, error) {
+	vars := map[string]any{"uuid": uuid}
+	if input.TenantActions != nil {
+		vars["tenantActions"] = input.TenantActions
+	}
+	if input.TenantSeverity != "" {
+		vars["tenantSeverity"] = input.TenantSeverity
+	}
+	var result struct {
+		UpdateInternalAnalytic Analytic `json:"updateInternalAnalytic"`
+	}
+	if err := c.transport.DoGraphQL(ctx, "/app", updateInternalAnalyticMutation, vars, &result); err != nil {
+		return Analytic{}, fmt.Errorf("UpdateInternalAnalytic(%s): %w", uuid, err)
+	}
+	return result.UpdateInternalAnalytic, nil
 }
 
 // DeleteAnalytic deletes an analytic by UUID.

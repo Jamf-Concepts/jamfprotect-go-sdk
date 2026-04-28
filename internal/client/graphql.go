@@ -47,7 +47,9 @@ func mapGraphQLErrors(errs []graphQLError) error {
 			continue
 		}
 		lower := strings.ToLower(e.Message)
-		if strings.Contains(lower, "not found") || strings.Contains(lower, "not_found") {
+		if strings.Contains(lower, "not found") ||
+			strings.Contains(lower, "not_found") ||
+			strings.Contains(lower, "no record found") {
 			isNotFound = true
 		}
 		msg := e.Message

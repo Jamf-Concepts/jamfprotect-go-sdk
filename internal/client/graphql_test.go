@@ -56,6 +56,18 @@ func TestMapGraphQLErrors(t *testing.T) {
 			wantGraphQL:  true,
 		},
 		{
+			name:         "no record found phrasing maps to ErrNotFound",
+			errors:       []graphQLError{{Message: "No record found to delete."}},
+			wantNotFound: true,
+			wantGraphQL:  true,
+		},
+		{
+			name:         "snake_case not_found maps to ErrNotFound",
+			errors:       []graphQLError{{Message: "code: not_found"}},
+			wantNotFound: true,
+			wantGraphQL:  true,
+		},
+		{
 			name: "multiple errors joined",
 			errors: []graphQLError{
 				{Message: "first error"},
