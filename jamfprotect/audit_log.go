@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"time"
 )
 
@@ -42,7 +43,6 @@ query listAuditLogsByDate(
 	}
 }
 ` + auditLogFields
-
 
 // MaxAuditLogDays is the maximum window size enforced by the SDK.
 const MaxAuditLogDays = 7
@@ -94,9 +94,7 @@ func (c *Client) fetchAllAuditLogs(ctx context.Context, query string, baseVars m
 	var prevCursor string
 
 	vars := make(map[string]any, len(baseVars))
-	for k, v := range baseVars {
-		vars[k] = v
-	}
+	maps.Copy(vars, baseVars)
 
 	for {
 		raw := make(map[string]json.RawMessage)
@@ -149,4 +147,3 @@ func (c *Client) ListAuditLogsByDate(ctx context.Context, dateRange *AuditLogDat
 	}
 	return logs, nil
 }
-
