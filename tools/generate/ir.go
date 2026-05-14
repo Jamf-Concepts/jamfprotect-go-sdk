@@ -382,7 +382,7 @@ func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, 
 	if idField == "" {
 		idField = "id"
 	}
-	sig, doc, body, err := buildMethodParts(op, kind, endpoint, returnType, returnNullable, resultKey, constName, idField, res.RBACMap)
+	sig, doc, body, err := buildMethodParts(op, kind, endpoint, returnType, returnNullable, resultKey, constName, idField, res.RBACMap, res.ExtraVarValues)
 	if err != nil {
 		return IROperation{}, err
 	}
@@ -589,12 +589,12 @@ func buildSimpleListStr(gqlName, fragRef string) string {
 	return fmt.Sprintf("\nquery %s {\n\t%s {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t}\n}\n", gqlName, gqlName, fragRef)
 }
 
-func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, returnNullable bool, resultKey, constName, idField, rbacMap string) (sig, doc, body string, err error) {
+func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, returnNullable bool, resultKey, constName, idField, rbacMap string, extraVarValues map[string]any) (sig, doc, body string, err error) {
 	switch kind {
 	case "get":
 		sig = fmt.Sprintf("(ctx context.Context, %s string) (*%s, error)", idField, returnType)
 		doc = fmt.Sprintf("// %s retrieves a %s by ID.", op.Name, lcFirst(returnType))
-		body = buildGetBody(op.Name, returnType, resultKey, endpoint, constName, idField, rbacMap)
+		body = buildGetBody(op.Name, returnType, resultKey, endpoint, constName, idField, rbacMap, extraVarValues)
 
 	case "create":
 		goInputName := op.InputType
@@ -604,7 +604,7 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		sig = fmt.Sprintf("(ctx context.Context, input %s) (%s, error)", goInputName, returnType)
 		doc = fmt.Sprintf("// %s creates a new %s.", op.Name, lcFirst(returnType))
 		buildFn := "build" + strings.TrimSuffix(goInputName, "Input") + "Variables"
-		body = buildCreateBody(op.Name, returnType, resultKey, endpoint, constName, buildFn, rbacMap, op.WrappedInput)
+		body = buildCreateBody(op.Name, returnType, resultKey, endpoint, constName, buildFn, rbacMap, op.WrappedInput, extraVarValues)
 
 	case "update":
 		goInputName := op.InputType
@@ -614,7 +614,7 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		sig = fmt.Sprintf("(ctx context.Context, %s string, input %s) (%s, error)", idField, goInputName, returnType)
 		doc = fmt.Sprintf("// %s updates an existing %s.", op.Name, lcFirst(returnType))
 		buildFn := "build" + strings.TrimSuffix(goInputName, "Input") + "Variables"
-		body = buildUpdateBody(op.Name, returnType, resultKey, endpoint, constName, buildFn, idField, rbacMap, op.WrappedInput)
+		body = buildUpdateBody(op.Name, returnType, resultKey, endpoint, constName, buildFn, idField, rbacMap, op.WrappedInput, extraVarValues)
 
 	case "delete":
 		sig = fmt.Sprintf("(ctx context.Context, %s string) error", idField)
@@ -641,6 +641,39 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 	return
 }
 
+// buildMapLit emits a Go map[string]any{...} literal from a map, or "" when the map is empty.
+func buildMapLit(m map[string]any) string {
+	if len(m) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%q: %s", k, formatGoLiteral(m[k])))
+	}
+	return "map[string]any{" + strings.Join(parts, ", ") + "}"
+}
+
+// mergeVarsExpr builds a Go expression that produces a vars map from base literal, optional
+// extra var values, and optional rbacMap identifier.
+func mergeVarsExpr(baseLit, extraVarLit, rbacMap string) string {
+	args := []string{baseLit}
+	if extraVarLit != "" {
+		args = append(args, extraVarLit)
+	}
+	if rbacMap != "" {
+		args = append(args, rbacMap)
+	}
+	if len(args) == 1 {
+		return "vars := " + args[0]
+	}
+	return "vars := mergeVars(" + strings.Join(args, ", ") + ")"
+}
+
 func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constName string) string {
 	tag := bt + `json:"` + resultKey + `"` + bt
 	return fmt.Sprintf(
@@ -648,56 +681,39 @@ func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constNam
 		methodName, returnType, tag, endpoint, constName, returnType, methodName, methodName)
 }
 
-func buildGetBody(methodName, returnType, resultKey, endpoint, constName, idField, rbacMap string) string {
+func buildGetBody(methodName, returnType, resultKey, endpoint, constName, idField, rbacMap string, extraVarValues map[string]any) string {
 	tag := bt + `json:"` + resultKey + `"` + bt
 	baseVarsLit := fmt.Sprintf("map[string]any{%q: %s}", idField, idField)
-	varAssign := "vars := " + baseVarsLit
-	if rbacMap != "" {
-		varAssign = "vars := mergeVars(" + baseVarsLit + ", " + rbacMap + ")"
-	}
+	varAssign := mergeVarsExpr(baseVarsLit, buildMapLit(extraVarValues), rbacMap)
 	return fmt.Sprintf(
 		"%s\n\tvar result struct {\n\t\t%s *%s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn nil, fmt.Errorf(\"%s(%%s): %%w\", %s, err)\n\t}\n\treturn result.%s, nil",
 		varAssign, methodName, returnType, tag, endpoint, constName, methodName, idField, methodName)
 }
 
-func buildCreateBody(methodName, returnType, resultKey, endpoint, constName, buildFn, rbacMap string, wrappedInput bool) string {
+func buildCreateBody(methodName, returnType, resultKey, endpoint, constName, buildFn, rbacMap string, wrappedInput bool, extraVarValues map[string]any) string {
 	tag := bt + `json:"` + resultKey + `"` + bt
-	var varAssign string
+	var baseLit string
 	if wrappedInput {
-		baseVarsLit := `map[string]any{"input": ` + buildFn + `(input)}`
-		if rbacMap != "" {
-			varAssign = "vars := mergeVars(" + baseVarsLit + ", " + rbacMap + ")"
-		} else {
-			varAssign = "vars := " + baseVarsLit
-		}
+		baseLit = `map[string]any{"input": ` + buildFn + `(input)}`
 	} else {
-		if rbacMap != "" {
-			varAssign = "vars := mergeVars(" + buildFn + "(input), " + rbacMap + ")"
-		} else {
-			varAssign = "vars := " + buildFn + "(input)"
-		}
+		baseLit = buildFn + "(input)"
 	}
+	varAssign := mergeVarsExpr(baseLit, buildMapLit(extraVarValues), rbacMap)
 	return fmt.Sprintf(
 		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
 		varAssign, methodName, returnType, tag, endpoint, constName, returnType, methodName, methodName)
 }
 
-func buildUpdateBody(methodName, returnType, resultKey, endpoint, constName, buildFn, idField, rbacMap string, wrappedInput bool) string {
+func buildUpdateBody(methodName, returnType, resultKey, endpoint, constName, buildFn, idField, rbacMap string, wrappedInput bool, extraVarValues map[string]any) string {
 	tag := bt + `json:"` + resultKey + `"` + bt
 	var varLines string
 	if wrappedInput {
-		baseVarsLit := fmt.Sprintf(`map[string]any{%q: %s, "input": `+buildFn+`(input)}`, idField, idField)
-		if rbacMap != "" {
-			varLines = "vars := mergeVars(" + baseVarsLit + ", " + rbacMap + ")"
-		} else {
-			varLines = "vars := " + baseVarsLit
-		}
+		baseLit := fmt.Sprintf(`map[string]any{%q: %s, "input": `+buildFn+`(input)}`, idField, idField)
+		varLines = mergeVarsExpr(baseLit, buildMapLit(extraVarValues), rbacMap)
 	} else {
-		if rbacMap != "" {
-			varLines = "vars := mergeVars(" + buildFn + "(input), " + rbacMap + ")\n\tvars[" + fmt.Sprintf("%q", idField) + "] = " + idField
-		} else {
-			varLines = "vars := " + buildFn + "(input)\n\tvars[" + fmt.Sprintf("%q", idField) + "] = " + idField
-		}
+		baseLit := buildFn + "(input)"
+		assign := mergeVarsExpr(baseLit, buildMapLit(extraVarValues), rbacMap)
+		varLines = assign + "\n\tvars[" + fmt.Sprintf("%q", idField) + "] = " + idField
 	}
 	return fmt.Sprintf(
 		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s(%%s): %%w\", %s, err)\n\t}\n\treturn result.%s, nil",

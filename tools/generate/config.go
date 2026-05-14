@@ -27,9 +27,10 @@ type ResourceConfig struct {
 	InputFields     []string          `json:"inputFields,omitempty"` // override which schema input fields to include; defaults to all
 	NestedTypes     []NestedTypeConfig `json:"nestedTypes,omitempty"`
 	Operations      []OperationConfig  `json:"operations"`
-	DirectiveFields map[string]string  `json:"directiveFields,omitempty"` // fieldName → GQL directive string (e.g. "@include(if: $RBAC_Plan)")
-	ExtraVars       map[string]string  `json:"extraVars,omitempty"`       // extra GQL var declarations added to non-delete operation signatures
-	RBACMap         string             `json:"rbacMap,omitempty"`         // package-level RBAC map name passed to mergeVars in method bodies
+	DirectiveFields  map[string]string  `json:"directiveFields,omitempty"`  // fieldName → GQL directive string (e.g. "@include(if: $RBAC_Plan)")
+	ExtraVars        map[string]string  `json:"extraVars,omitempty"`        // extra GQL var declarations added to non-delete operation signatures
+	ExtraVarValues   map[string]any     `json:"extraVarValues,omitempty"`   // static var values merged into get/create/update method bodies
+	RBACMap          string             `json:"rbacMap,omitempty"`          // package-level RBAC map name passed to mergeVars in method bodies
 }
 
 // SchemaTypeName returns the GraphQL schema type name for this resource.
