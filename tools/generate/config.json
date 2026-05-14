@@ -69,6 +69,64 @@
       ]
     },
     {
+      "file": "api_client.go",
+      "typeName": "ApiClient",
+      "idField": "clientId",
+      "fields": ["clientId", "created", "name", "assignedRoles", "password"],
+      "nestedTypes": [
+        {
+          "schemaName": "Role",
+          "goName": "ApiClientRole",
+          "fields": ["id", "name"]
+        }
+      ],
+      "operations": [
+        {
+          "name": "GetApiClient",
+          "gqlName": "getApiClient",
+          "kind": "get",
+          "endpoint": "/app",
+          "resultKey": "getApiClient"
+        },
+        {
+          "name": "CreateApiClient",
+          "gqlName": "createApiClient",
+          "kind": "create",
+          "endpoint": "/app",
+          "resultKey": "createApiClient",
+          "inputType": "ApiClientInput"
+        },
+        {
+          "name": "UpdateApiClient",
+          "gqlName": "updateApiClient",
+          "kind": "update",
+          "endpoint": "/app",
+          "resultKey": "updateApiClient",
+          "inputType": "ApiClientInput"
+        },
+        {
+          "name": "DeleteApiClient",
+          "gqlName": "deleteApiClient",
+          "kind": "delete",
+          "endpoint": "/app",
+          "resultKey": "deleteApiClient"
+        },
+        {
+          "name": "ListApiClients",
+          "gqlName": "listApiClients",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listApiClients",
+          "pagination": true,
+          "paginationVars": {
+            "direction": "DESC",
+            "field": "created",
+            "pageSize": 100
+          }
+        }
+      ]
+    },
+    {
       "file": "role.go",
       "typeName": "Role",
       "fields": ["id", "name", "permissions", "created", "updated"],

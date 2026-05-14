@@ -48,6 +48,11 @@ var goInitialisms = map[string]bool{
 	"api": true, "json": true, "xml": true, "sql": true, "uuid": true, "html": true,
 }
 
+// goCustomCasing handles plural/mixed initialisms that aren't pure uppercase (e.g. "ids" → "IDs").
+var goCustomCasing = map[string]string{
+	"ids": "IDs",
+}
+
 // toPascalCase converts a camelCase identifier to Go PascalCase,
 // applying standard Go initialisms (e.g. id → ID).
 func toPascalCase(s string) string {
@@ -58,7 +63,9 @@ func toPascalCase(s string) string {
 	var b strings.Builder
 	for _, w := range words {
 		lower := strings.ToLower(w)
-		if goInitialisms[lower] {
+		if custom, ok := goCustomCasing[lower]; ok {
+			b.WriteString(custom)
+		} else if goInitialisms[lower] {
 			b.WriteString(strings.ToUpper(w))
 		} else {
 			b.WriteRune(unicode.ToUpper(rune(w[0])))
