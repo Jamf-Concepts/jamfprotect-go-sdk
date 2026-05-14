@@ -102,9 +102,9 @@ type AnalyticSetInput struct {
 
 // AnalyticSetAnalytic contains Analytic data.
 type AnalyticSetAnalytic struct {
-	Jamf bool   `json:"jamf"`
-	Name string `json:"name"`
 	UUID string `json:"uuid"`
+	Name string `json:"name"`
+	Jamf bool   `json:"jamf"`
 }
 
 // AnalyticSetPlan contains Plan data.

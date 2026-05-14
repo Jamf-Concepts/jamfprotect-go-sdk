@@ -35,6 +35,7 @@ type ResourceConfig struct {
 	OptionalInputFields  []string           `json:"optionalInputFields,omitempty"`  // input fields omitted from buildVars when zero/nil (conditional inclusion)
 	InputTypeRenames     map[string]string  `json:"inputTypeRenames,omitempty"`     // schema InputObject name → Go type name for nested generated input types
 	ExtraResponseTypes   []ExtraResponseType `json:"extraResponseTypes,omitempty"`  // additional Go response types not tied to a field (e.g. list-item types)
+	NullableResponseFields []string         `json:"nullableResponseFields,omitempty"` // top-level response fields that should use pointer types even for scalars
 }
 
 // SchemaTypeName returns the GraphQL schema type name for this resource.
@@ -54,10 +55,13 @@ type ExtraResponseType struct {
 
 // NestedTypeConfig overrides Go naming for a nested schema type within a resource.
 type NestedTypeConfig struct {
-	SchemaName   string            `json:"schemaName"`
-	GoName       string            `json:"goName"`
-	Fields       []string          `json:"fields,omitempty"`       // restrict to a subset of schema fields; defaults to all
-	FieldRenames map[string]string `json:"fieldRenames,omitempty"`
+	SchemaName      string            `json:"schemaName"`
+	GoName          string            `json:"goName"`
+	Fields          []string          `json:"fields,omitempty"`       // restrict to a subset of schema fields; defaults to all
+	FieldRenames    map[string]string `json:"fieldRenames,omitempty"`
+	DirectiveFields map[string]string `json:"directiveFields,omitempty"` // sub-field GQL directives (e.g. "assignedRoles": "@include(if: $RBAC_Role)")
+	Path            string            `json:"path,omitempty"`            // optional dot-path under main type (e.g. "computer.plan") for path-specific overrides
+	NullableFields  []string          `json:"nullableFields,omitempty"`  // sub-fields that should use pointer types even for nullable scalars
 }
 
 // OperationConfig defines one GraphQL operation on a resource.
@@ -77,6 +81,23 @@ type OperationConfig struct {
 	WrappedInput    bool           `json:"wrappedInput,omitempty"`   // use $input: TypeName! single var instead of expanding fields
 	InputFields     []string       `json:"inputFields,omitempty"`    // per-op override for which schema input fields appear in the mutation
 	ListItemFields  []string       `json:"listItemFields,omitempty"` // inline fields for list items instead of the fragment (for minimal list queries)
+	InlineArgs      []InlineArg    `json:"inlineArgs,omitempty"`     // primitive Go args for singleton_update / inline ops (no struct input)
+	ResultPath      string         `json:"resultPath,omitempty"`     // dot-path for nested-result extraction (e.g. "getAppInitializationData.betaAcceptanceStatus")
+	ResultPathTypes []string       `json:"resultPathTypes,omitempty"` // optional Go type names for each intermediate level in ResultPath
+	GQLReturnType   string         `json:"gqlReturnType,omitempty"`  // when the op's GQL return type differs from the resource's main schema type
+	InlineFields    []string       `json:"inlineFields,omitempty"`   // inline scalar fields used instead of fragment ref (per-op subset)
+	ExtraVarValues  map[string]any `json:"extraVarValues,omitempty"` // per-op extra var values merged into method body
+	NoFragment      bool           `json:"noFragment,omitempty"`     // suppress fragment append (for ops with custom return shape)
+	DateRangeArg    string         `json:"dateRangeArg,omitempty"`   // for date_paginated: Go arg name (e.g. "dateRange") of type *NameDateRange
+}
+
+// InlineArg is a primitive Go argument for singleton_update or inline-arg operations.
+type InlineArg struct {
+	Name    string `json:"name"`             // Go arg name (camelCase)
+	GoType  string `json:"goType"`           // Go type (e.g. "bool", "string")
+	GQLVar  string `json:"gqlVar"`           // GQL variable name (e.g. "configFreeze")
+	GQLType string `json:"gqlType"`          // GQL type declaration (e.g. "Boolean!")
+	IsID    bool   `json:"isId,omitempty"`   // true if this is the resource ID arg (not wrapped in input)
 }
 
 func loadConfig(path string) (Config, error) {
