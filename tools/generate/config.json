@@ -182,6 +182,28 @@
       ]
     },
     {
+      "file": "downloads.go",
+      "typeName": "OrganizationDownloads",
+      "gqlTypeName": "OrganizationDownload",
+      "fields": ["pppc", "rootCA", "csr", "installerUuid", "vanillaPackage", "websocket_auth", "tamperPreventionProfile"],
+      "nestedTypes": [
+        {
+          "schemaName": "VanillaPackage",
+          "goName": "VanillaPackage",
+          "fields": ["version"]
+        }
+      ],
+      "operations": [
+        {
+          "name": "GetOrganizationDownloads",
+          "gqlName": "getOrganizationDownloads",
+          "kind": "singleton_get",
+          "endpoint": "/app",
+          "resultKey": "downloads"
+        }
+      ]
+    },
+    {
       "file": "role.go",
       "typeName": "Role",
       "fields": ["id", "name", "permissions", "created", "updated"],

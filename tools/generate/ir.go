@@ -416,6 +416,18 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		}
 		return buildUpdateStr(schema, op.InputType, gqlName, fragRef, idField, res.InputFields)
 
+	case "singleton_get":
+		// Use alias when resultKey differs from gqlName (e.g. "downloads: getOrganizationDownloads").
+		opResultKey := op.ResultKey
+		if opResultKey == "" {
+			opResultKey = gqlName
+		}
+		fieldRef := gqlName
+		if opResultKey != gqlName {
+			fieldRef = opResultKey + ": " + gqlName
+		}
+		return fmt.Sprintf("\nquery %s {\n\t%s {\n\t\t%s\n\t}\n}\n", gqlName, fieldRef, fragRef), nil
+
 	case "list":
 		if op.Pagination {
 			return buildPaginatedListStr(schema, gqlName, fragRef, op.PaginationVars)
@@ -542,6 +554,11 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		doc = fmt.Sprintf("// %s deletes a %s by ID.", op.Name, lcFirst(returnType))
 		body = buildDeleteBody(op.Name, endpoint, constName, idField)
 
+	case "singleton_get":
+		sig = fmt.Sprintf("(ctx context.Context) (%s, error)", returnType)
+		doc = fmt.Sprintf("// %s retrieves the %s.", op.Name, lcFirst(returnType))
+		body = buildSingletonGetBody(op.Name, returnType, resultKey, endpoint, constName)
+
 	case "list":
 		sig = fmt.Sprintf("(ctx context.Context) ([]%s, error)", returnType)
 		doc = fmt.Sprintf("// %s retrieves all %ss.", op.Name, lcFirst(returnType))
@@ -555,6 +572,13 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		err = fmt.Errorf("unsupported kind %q for method body", kind)
 	}
 	return
+}
+
+func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constName string) string {
+	tag := bt + `json:"` + resultKey + `"` + bt
+	return fmt.Sprintf(
+		"var result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, nil, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
+		methodName, returnType, tag, endpoint, constName, returnType, methodName, methodName)
 }
 
 func buildGetBody(methodName, returnType, resultKey, endpoint, constName, idField string) string {

@@ -99,11 +99,11 @@ type RolePermissions struct {
 
 // Role represents a Jamf Protect role.
 type Role struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Permissions RolePermissions `json:"permissions"`
-	Created     string          `json:"created"`
-	Updated     string          `json:"updated"`
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Permissions *RolePermissions `json:"permissions"`
+	Created     string           `json:"created"`
+	Updated     string           `json:"updated"`
 }
 
 // ── Client methods ────────────────────────────────────────────────────────────
