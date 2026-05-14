@@ -182,6 +182,83 @@
       ]
     },
     {
+      "file": "analytic_set.go",
+      "typeName": "AnalyticSet",
+      "idField": "uuid",
+      "fields": ["uuid", "name", "description", "analytics", "plans", "created", "updated", "managed", "types"],
+      "nestedTypes": [
+        {
+          "schemaName": "Analytic",
+          "goName": "AnalyticSetAnalytic",
+          "fields": ["uuid", "name", "jamf"]
+        },
+        {
+          "schemaName": "Plan",
+          "goName": "AnalyticSetPlan",
+          "fields": ["id", "name"]
+        }
+      ],
+      "directiveFields": {
+        "analytics": "@skip(if: $excludeAnalytics)",
+        "plans": "@include(if: $RBAC_Plan)"
+      },
+      "extraVars": {
+        "RBAC_Plan": "Boolean!",
+        "excludeAnalytics": "Boolean!"
+      },
+      "extraVarValues": {
+        "excludeAnalytics": false
+      },
+      "rbacMap": "rbacPlan",
+      "operations": [
+        {
+          "name": "CreateAnalyticSet",
+          "gqlName": "createAnalyticSet",
+          "kind": "create",
+          "endpoint": "/app",
+          "resultKey": "createAnalyticSet",
+          "inputType": "AnalyticSetInput"
+        },
+        {
+          "name": "GetAnalyticSet",
+          "gqlName": "getAnalyticSet",
+          "kind": "get",
+          "endpoint": "/app",
+          "resultKey": "getAnalyticSet"
+        },
+        {
+          "name": "UpdateAnalyticSet",
+          "gqlName": "updateAnalyticSet",
+          "kind": "update",
+          "endpoint": "/app",
+          "resultKey": "updateAnalyticSet",
+          "inputType": "AnalyticSetInput"
+        },
+        {
+          "name": "DeleteAnalyticSet",
+          "gqlName": "deleteAnalyticSet",
+          "kind": "delete",
+          "endpoint": "/app",
+          "resultKey": "deleteAnalyticSet"
+        },
+        {
+          "name": "ListAnalyticSets",
+          "gqlName": "listAnalyticSets",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listAnalyticSets",
+          "pagination": true,
+          "paginationVars": {
+            "direction": "DESC",
+            "field": "created",
+            "filter": {},
+            "pageSize": 100,
+            "excludeAnalytics": false
+          }
+        }
+      ]
+    },
+    {
       "file": "telemetry_v2.go",
       "typeName": "TelemetryV2",
       "idField": "id",
