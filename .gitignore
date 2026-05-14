@@ -43,3 +43,9 @@ dist/
 
 # Logs
 *.log
+
+# Testing and Debugging
+testing/
+
+# Compiled generator binary
+tools/generate/generate
