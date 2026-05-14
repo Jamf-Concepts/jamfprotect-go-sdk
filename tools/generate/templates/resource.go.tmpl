@@ -23,6 +23,15 @@ const {{.ConstName}} = `{{.QueryStr}}` + {{.FragConst}}
 const {{.ConstName}} = `{{.QueryStr}}`
 {{- end}}
 {{end}}
+{{range $enum := .TypedEnums}}
+{{$enum.Doc}}
+type {{$enum.GoName}} string
+
+const (
+{{range $enum.Constants}}	// {{.Name}} is the {{.Value}} value.
+	{{.Name}} {{$enum.GoName}} = "{{.Value}}"
+{{end}})
+{{end}}
 // ── Input types ───────────────────────────────────────────────────────────────
 {{range .InputTypes}}
 {{.Comment}}
@@ -41,7 +50,9 @@ type {{.Name}} struct {
 type {{.GoType.Name}} struct {
 {{range .GoType.Fields}}	{{.Name}} {{.Type}} `json:"{{.JSONTag}}"`
 {{end}}}
-
+{{if .ExtraTopLevel}}
+{{.ExtraTopLevel}}
+{{end}}
 // ── Client methods ────────────────────────────────────────────────────────────
 {{range .Operations}}
 {{.DocComment}}
