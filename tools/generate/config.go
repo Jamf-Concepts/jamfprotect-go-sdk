@@ -32,6 +32,7 @@ type ResourceConfig struct {
 type NestedTypeConfig struct {
 	SchemaName   string            `json:"schemaName"`
 	GoName       string            `json:"goName"`
+	Fields       []string          `json:"fields,omitempty"`       // restrict to a subset of schema fields; defaults to all
 	FieldRenames map[string]string `json:"fieldRenames,omitempty"`
 }
 

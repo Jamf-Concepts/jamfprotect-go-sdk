@@ -71,21 +71,25 @@ type BuildVar struct {
 func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, error) {
 	nestedGoNames := make(map[string]string)
 	nestedFieldRenames := make(map[string]map[string]string)
+	nestedFieldLists := make(map[string][]string) // schemaName → allowed fields (nil = all)
 	for _, nt := range res.NestedTypes {
 		nestedGoNames[nt.SchemaName] = nt.GoName
 		if len(nt.FieldRenames) > 0 {
 			nestedFieldRenames[nt.SchemaName] = nt.FieldRenames
 		}
+		if len(nt.Fields) > 0 {
+			nestedFieldLists[nt.SchemaName] = nt.Fields
+		}
 	}
 
 	fragConst := lcFirst(res.TypeName) + "Fields"
 
-	fragment, err := buildFragment(schema, res)
+	fragment, err := buildFragment(schema, res, nestedFieldLists)
 	if err != nil {
 		return IRResource{}, fmt.Errorf("fragment: %w", err)
 	}
 
-	mainType, nestedTypes, err := buildResponseTypes(schema, res, nestedGoNames, nestedFieldRenames, cfg.Scalars)
+	mainType, nestedTypes, err := buildResponseTypes(schema, res, nestedGoNames, nestedFieldRenames, nestedFieldLists, cfg.Scalars)
 	if err != nil {
 		return IRResource{}, fmt.Errorf("response types: %w", err)
 	}
@@ -122,7 +126,7 @@ func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, er
 	}, nil
 }
 
-func buildFragment(schema *ast.Schema, res ResourceConfig) (string, error) {
+func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[string][]string) (string, error) {
 	def := schema.Types[res.TypeName]
 	if def == nil {
 		return "", fmt.Errorf("type %q not found in schema", res.TypeName)
@@ -138,8 +142,15 @@ func buildFragment(schema *ast.Schema, res ResourceConfig) (string, error) {
 		fieldDef := schema.Types[base]
 		if fieldDef != nil && (fieldDef.Kind == ast.Object || fieldDef.Kind == ast.Interface) {
 			b.WriteString("\t" + fieldName + " {\n")
-			for _, sf := range fieldDef.Fields {
-				b.WriteString("\t\t" + sf.Name + "\n")
+			allowed := nestedFieldLists[base]
+			if len(allowed) > 0 {
+				for _, sf := range allowed {
+					b.WriteString("\t\t" + sf + "\n")
+				}
+			} else {
+				for _, sf := range fieldDef.Fields {
+					b.WriteString("\t\t" + sf.Name + "\n")
+				}
 			}
 			b.WriteString("\t}\n")
 		} else {
@@ -150,7 +161,7 @@ func buildFragment(schema *ast.Schema, res ResourceConfig) (string, error) {
 	return b.String(), nil
 }
 
-func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames map[string]string, nestedFieldRenames map[string]map[string]string, scalars map[string]string) (IRStruct, []IRStruct, error) {
+func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames map[string]string, nestedFieldRenames map[string]map[string]string, nestedFieldLists map[string][]string, scalars map[string]string) (IRStruct, []IRStruct, error) {
 	def := schema.Types[res.TypeName]
 	if def == nil {
 		return IRStruct{}, nil, fmt.Errorf("type %q not found in schema", res.TypeName)
@@ -180,7 +191,7 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 			if override, ok := nestedGoNames[base]; ok {
 				goTypeName = override
 			}
-			ns, err := buildNestedStruct(schema, base, goTypeName, nestedFieldRenames[base], scalars, nestedGoNames)
+			ns, err := buildNestedStruct(schema, base, goTypeName, nestedFieldRenames[base], nestedFieldLists[base], scalars, nestedGoNames)
 			if err != nil {
 				return IRStruct{}, nil, err
 			}
@@ -196,13 +207,20 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 	return mainStruct, nestedTypes, nil
 }
 
-func buildNestedStruct(schema *ast.Schema, schemaTypeName, goTypeName string, fieldRenames map[string]string, scalars map[string]string, nestedOverrides map[string]string) (IRStruct, error) {
+func buildNestedStruct(schema *ast.Schema, schemaTypeName, goTypeName string, fieldRenames map[string]string, allowedFields []string, scalars map[string]string, nestedOverrides map[string]string) (IRStruct, error) {
 	def := schema.Types[schemaTypeName]
 	if def == nil {
 		return IRStruct{}, fmt.Errorf("type %q not found in schema", schemaTypeName)
 	}
+	allowed := make(map[string]bool, len(allowedFields))
+	for _, f := range allowedFields {
+		allowed[f] = true
+	}
 	var fields []IRField
 	for _, f := range def.Fields {
+		if len(allowed) > 0 && !allowed[f.Name] {
+			continue
+		}
 		goName := toPascalCase(f.Name)
 		if renamed, ok := fieldRenames[f.Name]; ok {
 			goName = renamed
