@@ -548,6 +548,79 @@
       ]
     },
     {
+      "file": "change_management.go",
+      "typeName": "ChangeManagementConfig",
+      "gqlTypeName": "Organization",
+      "fields": ["configFreeze"],
+      "operations": [
+        {
+          "name": "GetConfigFreeze",
+          "gqlName": "getAppInitializationData",
+          "kind": "singleton_get",
+          "endpoint": "/app",
+          "returnType": "ChangeManagementConfig",
+          "resultKey": "getAppInitializationData",
+          "noFragment": true,
+          "inlineFields": ["configFreeze"]
+        },
+        {
+          "name": "UpdateOrganizationConfigFreeze",
+          "gqlName": "updateOrganizationConfigFreeze",
+          "kind": "singleton_update",
+          "endpoint": "/app",
+          "returnType": "ChangeManagementConfig",
+          "resultKey": "updateOrganizationConfigFreeze",
+          "noFragment": true,
+          "inlineFields": ["configFreeze"],
+          "inlineArgs": [
+            {"name": "configFreeze", "goType": "bool", "gqlVar": "configFreeze", "gqlType": "Boolean!"}
+          ]
+        }
+      ]
+    },
+    {
+      "file": "beta.go",
+      "typeName": "BetaAcceptanceStatus",
+      "fields": ["betaName", "acceptedTimestamp", "acceptedUser"],
+      "typedEnums": [
+        {
+          "schemaName": "BetaName",
+          "goName": "BetaName",
+          "doc": "// BetaName identifies a beta program in Jamf Protect.",
+          "constants": {
+            "NGTP_BETA": "BetaNameNGTP"
+          }
+        }
+      ],
+      "operations": [
+        {
+          "name": "GetBetaAcceptanceStatus",
+          "gqlName": "getAppInitializationData",
+          "kind": "singleton_get",
+          "endpoint": "/app",
+          "returnType": "BetaAcceptanceStatus",
+          "returnIsList": true,
+          "resultKey": "getAppInitializationData",
+          "resultPath": "getAppInitializationData.betaAcceptanceStatus",
+          "noFragment": true,
+          "inlineFields": ["betaName", "acceptedTimestamp", "acceptedUser"]
+        },
+        {
+          "name": "UpdateBetaAcceptanceStatus",
+          "gqlName": "updateBetaAcceptanceStatus",
+          "kind": "mutation_list",
+          "endpoint": "/app",
+          "resultKey": "updateBetaAcceptanceStatus",
+          "resultPath": "updateBetaAcceptanceStatus.betaAcceptanceStatus",
+          "noFragment": true,
+          "inlineFields": ["betaName", "acceptedTimestamp", "acceptedUser"],
+          "inlineArgs": [
+            {"name": "betaName", "goType": "BetaName", "gqlVar": "betaName", "gqlType": "BetaName!"}
+          ]
+        }
+      ]
+    },
+    {
       "file": "alert.go",
       "typeName": "Alert",
       "idField": "uuid",

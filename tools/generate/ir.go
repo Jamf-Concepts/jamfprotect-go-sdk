@@ -25,7 +25,22 @@ type IRResource struct {
 	InputTypes     []IRStruct
 	Operations     []IROperation
 	BuildVarsFuncs []IRBuildVarsFunc
-	NeedClient     bool // true when any operation uses client.ListAll
+	TypedEnums     []IRTypedEnum
+	NeedClient     bool   // true when any operation uses client.ListAll
+	ExtraTopLevel  string // raw Go code emitted after main type, before client methods
+}
+
+// IRTypedEnum is a typed string alias with named constants.
+type IRTypedEnum struct {
+	GoName    string
+	Doc       string
+	Constants []IRTypedEnumConst
+}
+
+// IRTypedEnumConst is one named constant of a typed enum.
+type IRTypedEnumConst struct {
+	Name  string
+	Value string
 }
 
 // IRStruct is a Go struct definition.
@@ -142,6 +157,25 @@ func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, er
 		}
 	}
 
+	var typedEnums []IRTypedEnum
+	for _, te := range res.TypedEnums {
+		doc := te.Doc
+		if doc == "" {
+			doc = fmt.Sprintf("// %s identifies a %s value.", te.GoName, te.GoName)
+		}
+		var consts []IRTypedEnumConst
+		// Sort by Go const name for stable output.
+		var keys []string
+		for k := range te.Constants {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, schemaVal := range keys {
+			consts = append(consts, IRTypedEnumConst{Name: te.Constants[schemaVal], Value: schemaVal})
+		}
+		typedEnums = append(typedEnums, IRTypedEnum{GoName: te.GoName, Doc: doc, Constants: consts})
+	}
+
 	return IRResource{
 		TypeName:       res.TypeName,
 		File:           res.File,
@@ -152,7 +186,9 @@ func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, er
 		InputTypes:     inputTypes,
 		Operations:     ops,
 		BuildVarsFuncs: buildVarsFuncs,
+		TypedEnums:     typedEnums,
 		NeedClient:     needClient,
+		ExtraTopLevel:  res.ExtraTopLevel,
 	}, nil
 }
 
@@ -938,7 +974,7 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		if len(op.InputFields) > 0 {
 			opInputFields = op.InputFields
 		}
-		return buildMutationListStr(schema, op.InputType, gqlName, bodySelection, opInputFields, extraDecls)
+		return buildMutationListStr(schema, op.InputType, gqlName, bodySelection, opInputFields, extraDecls, op.ResultPath)
 
 	case "singleton_update":
 		// Mutation taking primitive args, wrapped in input: {field: $field}.
@@ -981,8 +1017,8 @@ func wrapResultPath(path, gqlName, body string) string {
 	return cur
 }
 
-// buildMutationListStr builds a mutation that returns {items: [T]}.
-func buildMutationListStr(schema *ast.Schema, inputTypeName, gqlName, bodySelection string, allowedFields []string, extraDecls string) (string, error) {
+// buildMutationListStr builds a mutation that returns {items: [T]} (or custom-path equivalent).
+func buildMutationListStr(schema *ast.Schema, inputTypeName, gqlName, bodySelection string, allowedFields []string, extraDecls, resultPath string) (string, error) {
 	def := schema.Types[inputTypeName]
 	if def == nil {
 		return "", fmt.Errorf("input type %q not found", inputTypeName)
@@ -1005,11 +1041,20 @@ func buildMutationListStr(schema *ast.Schema, inputTypeName, gqlName, bodySelect
 		vars += ", " + extraDecls
 	}
 	input := "{" + strings.Join(inputParts, ", ") + "}"
-	return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(input: %s) {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t}\n}\n", gqlName, vars, gqlName, input, bodySelection), nil
+	// Build the selection: if resultPath is set, use the second part as the wrapping field name.
+	wrapField := "items"
+	if resultPath != "" {
+		parts := strings.Split(resultPath, ".")
+		if len(parts) >= 2 {
+			wrapField = parts[len(parts)-1]
+		}
+	}
+	return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(input: %s) {\n\t\t%s {\n\t\t\t%s\n\t\t}\n\t}\n}\n", gqlName, vars, gqlName, input, wrapField, bodySelection), nil
 }
 
 // buildInlineArgsMutationStr builds a mutation from primitive inline args.
-// If wrapInItems is true, wraps the response in {items: [T]}.
+// If wrapInItems is true, wraps the response in {<wrapField>: [T]} where wrapField defaults to "items"
+// or is derived from op.ResultPath when set.
 func buildInlineArgsMutationStr(op OperationConfig, gqlName, bodySelection string, wrapInItems bool, extraDecls, idField string) (string, error) {
 	var varDecls []string
 	var idArgPart string
@@ -1037,7 +1082,14 @@ func buildInlineArgsMutationStr(op OperationConfig, gqlName, bodySelection strin
 		argPart = "input: {" + strings.Join(inputParts, ", ") + "}"
 	}
 	if wrapInItems {
-		return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(%s) {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t}\n}\n", gqlName, vars, gqlName, argPart, bodySelection), nil
+		wrapField := "items"
+		if op.ResultPath != "" {
+			parts := strings.Split(op.ResultPath, ".")
+			if len(parts) >= 2 {
+				wrapField = parts[len(parts)-1]
+			}
+		}
+		return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(%s) {\n\t\t%s {\n\t\t\t%s\n\t\t}\n\t}\n}\n", gqlName, vars, gqlName, argPart, wrapField, bodySelection), nil
 	}
 	return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(%s) {\n\t\t%s\n\t}\n}\n", gqlName, vars, gqlName, argPart, bodySelection), nil
 }
@@ -1181,9 +1233,13 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		body = buildDeleteBody(op.Name, endpoint, constName, idField)
 
 	case "singleton_get":
-		sig = fmt.Sprintf("(ctx context.Context) (%s, error)", returnType)
+		retTypeExpr := returnType
+		if op.ReturnIsList {
+			retTypeExpr = "[]" + returnType
+		}
+		sig = fmt.Sprintf("(ctx context.Context) (%s, error)", retTypeExpr)
 		doc = fmt.Sprintf("// %s retrieves the %s.", op.Name, lcFirst(returnType))
-		body = buildSingletonGetBody(op.Name, returnType, resultKey, endpoint, constName, op.ResultPath, op.ResultPathTypes, extraVarValues, rbacMap)
+		body = buildSingletonGetBody(op.Name, returnType, resultKey, endpoint, constName, op.ResultPath, op.ResultPathTypes, extraVarValues, rbacMap, op.ReturnIsList)
 
 	case "list":
 		sig = fmt.Sprintf("(ctx context.Context) ([]%s, error)", returnType)
@@ -1285,8 +1341,7 @@ func mergeVarsExpr(baseLit, extraVarLit, rbacMap string) string {
 	return "vars := mergeVars(" + strings.Join(args, ", ") + ")"
 }
 
-func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constName, resultPath string, resultPathTypes []string, extraVarValues map[string]any, rbacMap string) string {
-	// Build vars expression. For singleton_get with extraVars/rbacMap, vars are needed.
+func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constName, resultPath string, resultPathTypes []string, extraVarValues map[string]any, rbacMap string, returnIsList bool) string {
 	varsArg := "nil"
 	varAssignPrefix := ""
 	if len(extraVarValues) > 0 || rbacMap != "" {
@@ -1304,29 +1359,32 @@ func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constNam
 		varsArg = "vars"
 	}
 
+	// Build the inner type expression and the zero-value expression for error returns.
+	innerType := returnType
+	zeroExpr := returnType + "{}"
+	if returnIsList {
+		innerType = "[]" + returnType
+		zeroExpr = "nil"
+	}
+
 	if resultPath == "" {
 		tag := bt + `json:"` + resultKey + `"` + bt
 		return fmt.Sprintf(
-			"%svar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, %s, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
-			varAssignPrefix, methodName, returnType, tag, endpoint, constName, varsArg, returnType, methodName, methodName)
+			"%svar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, %s, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
+			varAssignPrefix, methodName, innerType, tag, endpoint, constName, varsArg, zeroExpr, methodName, methodName)
 	}
 
-	// Nested-result extraction: result.Level1.Level2.<value>
 	parts := strings.Split(resultPath, ".")
-	// Build nested struct + accessor path.
-	// Outer struct's field is parts[0]; type wraps inner struct; final type is returnType.
 	var b strings.Builder
 	b.WriteString(varAssignPrefix)
 	b.WriteString("var result struct {\n")
-	// Build nested: each level a struct field with json tag.
 	indent := "\t\t"
 	closers := []string{}
 	for i, part := range parts {
 		fieldGoName := toPascalCase(part)
 		if i == len(parts)-1 {
-			fmt.Fprintf(&b, "%s%s %s %sjson:\"%s\"%s\n", indent, fieldGoName, returnType, bt, part, bt)
+			fmt.Fprintf(&b, "%s%s %s %sjson:\"%s\"%s\n", indent, fieldGoName, innerType, bt, part, bt)
 		} else {
-			// Allow optional intermediate type override; default is anonymous struct.
 			fmt.Fprintf(&b, "%s%s struct {\n", indent, fieldGoName)
 			closers = append(closers, indent+"} "+bt+"json:\""+part+"\""+bt)
 			indent += "\t"
@@ -1336,8 +1394,7 @@ func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constNam
 		b.WriteString(closers[i] + "\n")
 	}
 	b.WriteString("\t}\n")
-	fmt.Fprintf(&b, "\tif err := c.transport.DoGraphQL(ctx, %q, %s, %s, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n", endpoint, constName, varsArg, returnType, methodName)
-	// Build accessor: result.Part1.Part2...
+	fmt.Fprintf(&b, "\tif err := c.transport.DoGraphQL(ctx, %q, %s, %s, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s: %%w\", err)\n\t}\n", endpoint, constName, varsArg, zeroExpr, methodName)
 	accessor := "result"
 	for _, part := range parts {
 		accessor += "." + toPascalCase(part)
@@ -1355,12 +1412,8 @@ func buildListSimpleTopLevelBody(methodName, returnType, resultKey, endpoint, co
 }
 
 func buildMutationListBody(op OperationConfig, returnType, resultKey, endpoint, constName, rbacMap string, extraVarValues map[string]any) string {
-	outerTag := bt + `json:"` + resultKey + `"` + bt
-	innerTag := bt + `json:"items"` + bt
-
 	var varAssign string
 	if len(op.InlineArgs) > 0 {
-		// Build vars from inline args.
 		var parts []string
 		for _, a := range op.InlineArgs {
 			parts = append(parts, fmt.Sprintf("%q: %s", a.GQLVar, a.Name))
@@ -1377,9 +1430,43 @@ func buildMutationListBody(op OperationConfig, returnType, resultKey, endpoint, 
 		varAssign = mergeVarsExpr(baseLit, buildMapLit(extraVarValues), rbacMap)
 	}
 
-	return fmt.Sprintf(
-		"%s\n\tvar result struct {\n\t\t%s struct {\n\t\t\tItems []%s %s\n\t\t} %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s.Items, nil",
-		varAssign, toPascalCase(resultKey), returnType, innerTag, outerTag, endpoint, constName, op.Name, toPascalCase(resultKey))
+	// Default shape: result.<MethodName>.Items where Items = []ReturnType.
+	if op.ResultPath == "" {
+		outerTag := bt + `json:"` + resultKey + `"` + bt
+		innerTag := bt + `json:"items"` + bt
+		return fmt.Sprintf(
+			"%s\n\tvar result struct {\n\t\t%s struct {\n\t\t\tItems []%s %s\n\t\t} %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s.Items, nil",
+			varAssign, toPascalCase(resultKey), returnType, innerTag, outerTag, endpoint, constName, op.Name, toPascalCase(resultKey))
+	}
+
+	// Custom path: e.g. "updateBetaAcceptanceStatus.betaAcceptanceStatus" → result.UpdateBetaAcceptanceStatus.BetaAcceptanceStatus
+	parts := strings.Split(op.ResultPath, ".")
+	var b strings.Builder
+	b.WriteString(varAssign)
+	b.WriteString("\n\tvar result struct {\n")
+	indent := "\t\t"
+	closers := []string{}
+	for i, part := range parts {
+		fieldGoName := toPascalCase(part)
+		if i == len(parts)-1 {
+			fmt.Fprintf(&b, "%s%s []%s %sjson:\"%s\"%s\n", indent, fieldGoName, returnType, bt, part, bt)
+		} else {
+			fmt.Fprintf(&b, "%s%s struct {\n", indent, fieldGoName)
+			closers = append(closers, indent+"} "+bt+"json:\""+part+"\""+bt)
+			indent += "\t"
+		}
+	}
+	for i := len(closers) - 1; i >= 0; i-- {
+		b.WriteString(closers[i] + "\n")
+	}
+	b.WriteString("\t}\n")
+	fmt.Fprintf(&b, "\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t}\n", endpoint, constName, op.Name)
+	accessor := "result"
+	for _, part := range parts {
+		accessor += "." + toPascalCase(part)
+	}
+	fmt.Fprintf(&b, "\treturn %s, nil", accessor)
+	return b.String()
 }
 
 func buildSingletonUpdateBody(op OperationConfig, returnType, resultKey, endpoint, constName, rbacMap string, extraVarValues map[string]any) string {

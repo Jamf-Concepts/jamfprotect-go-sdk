@@ -36,6 +36,17 @@ type ResourceConfig struct {
 	InputTypeRenames     map[string]string  `json:"inputTypeRenames,omitempty"`     // schema InputObject name → Go type name for nested generated input types
 	ExtraResponseTypes   []ExtraResponseType `json:"extraResponseTypes,omitempty"`  // additional Go response types not tied to a field (e.g. list-item types)
 	NullableResponseFields []string         `json:"nullableResponseFields,omitempty"` // top-level response fields that should use pointer types even for scalars
+	TypedEnums         []TypedEnumConfig   `json:"typedEnums,omitempty"`          // typed Go enum aliases with named constants
+	IsList             bool                `json:"isList,omitempty"`              // generate a [TypeName] return at the main type fragment ref level
+	ExtraTopLevel      string              `json:"extraTopLevel,omitempty"`       // verbatim Go code appended after the main type definition (for one-off helpers)
+}
+
+// TypedEnumConfig declares a Go typed string alias with named constants for a schema enum.
+type TypedEnumConfig struct {
+	SchemaName string            `json:"schemaName"`
+	GoName     string            `json:"goName"`
+	Constants  map[string]string `json:"constants"` // schema enum value → Go const name (e.g. "NGTP_BETA": "BetaNameNGTP")
+	Doc        string            `json:"doc,omitempty"`
 }
 
 // SchemaTypeName returns the GraphQL schema type name for this resource.
@@ -89,6 +100,7 @@ type OperationConfig struct {
 	ExtraVarValues  map[string]any `json:"extraVarValues,omitempty"` // per-op extra var values merged into method body
 	NoFragment      bool           `json:"noFragment,omitempty"`     // suppress fragment append (for ops with custom return shape)
 	DateRangeArg    string         `json:"dateRangeArg,omitempty"`   // for date_paginated: Go arg name (e.g. "dateRange") of type *NameDateRange
+	ReturnIsList    bool           `json:"returnIsList,omitempty"`   // when true, the op returns []ReturnType instead of ReturnType (for singleton_get/singleton_update on list-shaped results)
 }
 
 // InlineArg is a primitive Go argument for singleton_update or inline-arg operations.
