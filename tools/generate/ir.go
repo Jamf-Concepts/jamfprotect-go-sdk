@@ -141,8 +141,13 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 		}
 		base := baseTypeName(f.Type)
 		fieldDef := schema.Types[base]
+		directive := res.DirectiveFields[fieldName]
 		if fieldDef != nil && (fieldDef.Kind == ast.Object || fieldDef.Kind == ast.Interface) {
-			b.WriteString("\t" + fieldName + " {\n")
+			if directive != "" {
+				b.WriteString("\t" + fieldName + " " + directive + " {\n")
+			} else {
+				b.WriteString("\t" + fieldName + " {\n")
+			}
 			allowed := nestedFieldLists[base]
 			if len(allowed) > 0 {
 				for _, sf := range allowed {
@@ -155,7 +160,11 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 			}
 			b.WriteString("\t}\n")
 		} else {
-			b.WriteString("\t" + fieldName + "\n")
+			if directive != "" {
+				b.WriteString("\t" + fieldName + " " + directive + "\n")
+			} else {
+				b.WriteString("\t" + fieldName + "\n")
+			}
 		}
 	}
 	b.WriteString("}\n")
@@ -373,11 +382,17 @@ func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, 
 	if idField == "" {
 		idField = "id"
 	}
-	sig, doc, body, err := buildMethodParts(op, kind, endpoint, returnType, returnNullable, resultKey, constName, idField)
+	sig, doc, body, err := buildMethodParts(op, kind, endpoint, returnType, returnNullable, resultKey, constName, idField, res.RBACMap)
 	if err != nil {
 		return IROperation{}, err
 	}
 
+	// Delete ops return only the id field and don't use the fragment — omit fragConst
+	// so the full fragment body (with directives) isn't included in the delete mutation string.
+	opFragConst := fragConst
+	if kind == "delete" {
+		opFragConst = ""
+	}
 	return IROperation{
 		DocComment: doc,
 		MethodName: op.Name,
@@ -385,9 +400,26 @@ func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, 
 		MethodBody: body,
 		ConstName:  constName,
 		QueryStr:   queryStr,
-		FragConst:  fragConst,
+		FragConst:  opFragConst,
 		Pagination: op.Pagination,
 	}, nil
+}
+
+// extraVarDeclStr builds a comma-separated GQL variable declaration string from extraVars.
+func extraVarDeclStr(extraVars map[string]string) string {
+	if len(extraVars) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(extraVars))
+	for k := range extraVars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, "$"+k+": "+extraVars[k])
+	}
+	return strings.Join(parts, ", ")
 }
 
 func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, gqlName, kind string) (string, error) {
@@ -397,24 +429,49 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		idField = "id"
 	}
 
+	// Extra var declarations are added to all ops that use the fragment (not delete).
+	extraDecls := ""
+	if kind != "delete" {
+		extraDecls = extraVarDeclStr(res.ExtraVars)
+	}
+
 	switch kind {
 	case "get":
-		return fmt.Sprintf("\nquery %s($%s: ID!) {\n\t%s(%s: $%s) {\n\t\t%s\n\t}\n}\n", gqlName, idField, gqlName, idField, idField, fragRef), nil
+		varDecls := "$" + idField + ": ID!"
+		if extraDecls != "" {
+			varDecls += ", " + extraDecls
+		}
+		return fmt.Sprintf("\nquery %s(%s) {\n\t%s(%s: $%s) {\n\t\t%s\n\t}\n}\n", gqlName, varDecls, gqlName, idField, idField, fragRef), nil
 
 	case "delete":
-		return fmt.Sprintf("\nmutation %s($%s: ID!) {\n\t%s(%s: $%s) {\n\t\t%s\n\t}\n}\n", gqlName, idField, gqlName, idField, idField, fragRef), nil
+		// Return only the id field — no fragment reference avoids directive variable validation.
+		return fmt.Sprintf("\nmutation %s($%s: ID!) {\n\t%s(%s: $%s) {\n\t\t%s\n\t}\n}\n", gqlName, idField, gqlName, idField, idField, idField), nil
 
 	case "create":
 		if op.InputType == "" {
 			return "", fmt.Errorf("create op %q requires inputType", op.Name)
 		}
-		return buildCreateStr(schema, op.InputType, gqlName, fragRef, res.InputFields)
+		if op.WrappedInput {
+			allDecls := "$input: " + op.InputType + "!"
+			if extraDecls != "" {
+				allDecls += ", " + extraDecls
+			}
+			return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(input: $input) {\n\t\t%s\n\t}\n}\n", gqlName, allDecls, gqlName, fragRef), nil
+		}
+		return buildCreateStr(schema, op.InputType, gqlName, fragRef, res.InputFields, extraDecls)
 
 	case "update":
 		if op.InputType == "" {
 			return "", fmt.Errorf("update op %q requires inputType", op.Name)
 		}
-		return buildUpdateStr(schema, op.InputType, gqlName, fragRef, idField, res.InputFields)
+		if op.WrappedInput {
+			allDecls := "$" + idField + ": ID!, $input: " + op.InputType + "!"
+			if extraDecls != "" {
+				allDecls += ", " + extraDecls
+			}
+			return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(%s: $%s, input: $input) {\n\t\t%s\n\t}\n}\n", gqlName, allDecls, gqlName, idField, idField, fragRef), nil
+		}
+		return buildUpdateStr(schema, op.InputType, gqlName, fragRef, idField, res.InputFields, extraDecls)
 
 	case "singleton_get":
 		// Use alias when resultKey differs from gqlName (e.g. "downloads: getOrganizationDownloads").
@@ -430,7 +487,7 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 
 	case "list":
 		if op.Pagination {
-			return buildPaginatedListStr(schema, gqlName, fragRef, op.PaginationVars)
+			return buildPaginatedListStr(schema, gqlName, fragRef, op.PaginationVars, extraDecls)
 		}
 		return buildSimpleListStr(gqlName, fragRef), nil
 
@@ -439,7 +496,7 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 	}
 }
 
-func buildCreateStr(schema *ast.Schema, inputTypeName, gqlName, fragRef string, allowedFields []string) (string, error) {
+func buildCreateStr(schema *ast.Schema, inputTypeName, gqlName, fragRef string, allowedFields []string, extraDecls string) (string, error) {
 	def := schema.Types[inputTypeName]
 	if def == nil {
 		return "", fmt.Errorf("input type %q not found", inputTypeName)
@@ -458,11 +515,14 @@ func buildCreateStr(schema *ast.Schema, inputTypeName, gqlName, fragRef string, 
 		inputParts = append(inputParts, f.Name+": $"+f.Name)
 	}
 	vars := strings.Join(varDecls, ", ")
+	if extraDecls != "" {
+		vars += ", " + extraDecls
+	}
 	input := "{" + strings.Join(inputParts, ", ") + "}"
 	return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(\n\t\tinput: %s\n\t) {\n\t\t%s\n\t}\n}\n", gqlName, vars, gqlName, input, fragRef), nil
 }
 
-func buildUpdateStr(schema *ast.Schema, inputTypeName, gqlName, fragRef, idField string, allowedFields []string) (string, error) {
+func buildUpdateStr(schema *ast.Schema, inputTypeName, gqlName, fragRef, idField string, allowedFields []string, extraDecls string) (string, error) {
 	def := schema.Types[inputTypeName]
 	if def == nil {
 		return "", fmt.Errorf("input type %q not found", inputTypeName)
@@ -481,11 +541,14 @@ func buildUpdateStr(schema *ast.Schema, inputTypeName, gqlName, fragRef, idField
 		inputParts = append(inputParts, f.Name+": $"+f.Name)
 	}
 	vars := strings.Join(varDecls, ", ")
+	if extraDecls != "" {
+		vars += ", " + extraDecls
+	}
 	input := "{" + strings.Join(inputParts, ", ") + "}"
 	return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(\n\t\t%s: $%s\n\t\tinput: %s\n\t) {\n\t\t%s\n\t}\n}\n", gqlName, vars, gqlName, idField, idField, input, fragRef), nil
 }
 
-func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginationVars map[string]any) (string, error) {
+func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginationVars map[string]any, extraDecls string) (string, error) {
 	queryDef := schema.Query.Fields.ForName(gqlName)
 	if queryDef == nil {
 		return "", fmt.Errorf("query %q not found in schema", gqlName)
@@ -511,10 +574,14 @@ func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginati
 	for _, leaf := range leaves {
 		varDecls = append(varDecls, "$"+leaf.VarName+": "+leaf.TypeStr)
 	}
+	allDecls := strings.Join(varDecls, ", ")
+	if extraDecls != "" {
+		allDecls += ", " + extraDecls
+	}
 	constructor := buildConstructorStr(nodes)
 	return fmt.Sprintf(
 		"\nquery %s(%s) {\n\t%s(\n\t\tinput: %s\n\t) {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t\tpageInfo {\n\t\t\tnext\n\t\t\ttotal\n\t\t}\n\t}\n}\n",
-		gqlName, strings.Join(varDecls, ", "), gqlName, constructor, fragRef,
+		gqlName, allDecls, gqlName, constructor, fragRef,
 	), nil
 }
 
@@ -522,12 +589,12 @@ func buildSimpleListStr(gqlName, fragRef string) string {
 	return fmt.Sprintf("\nquery %s {\n\t%s {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t}\n}\n", gqlName, gqlName, fragRef)
 }
 
-func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, returnNullable bool, resultKey, constName, idField string) (sig, doc, body string, err error) {
+func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, returnNullable bool, resultKey, constName, idField, rbacMap string) (sig, doc, body string, err error) {
 	switch kind {
 	case "get":
 		sig = fmt.Sprintf("(ctx context.Context, %s string) (*%s, error)", idField, returnType)
 		doc = fmt.Sprintf("// %s retrieves a %s by ID.", op.Name, lcFirst(returnType))
-		body = buildGetBody(op.Name, returnType, resultKey, endpoint, constName, idField)
+		body = buildGetBody(op.Name, returnType, resultKey, endpoint, constName, idField, rbacMap)
 
 	case "create":
 		goInputName := op.InputType
@@ -537,7 +604,7 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		sig = fmt.Sprintf("(ctx context.Context, input %s) (%s, error)", goInputName, returnType)
 		doc = fmt.Sprintf("// %s creates a new %s.", op.Name, lcFirst(returnType))
 		buildFn := "build" + strings.TrimSuffix(goInputName, "Input") + "Variables"
-		body = buildCreateBody(op.Name, returnType, resultKey, endpoint, constName, buildFn)
+		body = buildCreateBody(op.Name, returnType, resultKey, endpoint, constName, buildFn, rbacMap, op.WrappedInput)
 
 	case "update":
 		goInputName := op.InputType
@@ -547,7 +614,7 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		sig = fmt.Sprintf("(ctx context.Context, %s string, input %s) (%s, error)", idField, goInputName, returnType)
 		doc = fmt.Sprintf("// %s updates an existing %s.", op.Name, lcFirst(returnType))
 		buildFn := "build" + strings.TrimSuffix(goInputName, "Input") + "Variables"
-		body = buildUpdateBody(op.Name, returnType, resultKey, endpoint, constName, buildFn, idField)
+		body = buildUpdateBody(op.Name, returnType, resultKey, endpoint, constName, buildFn, idField, rbacMap, op.WrappedInput)
 
 	case "delete":
 		sig = fmt.Sprintf("(ctx context.Context, %s string) error", idField)
@@ -563,7 +630,7 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		sig = fmt.Sprintf("(ctx context.Context) ([]%s, error)", returnType)
 		doc = fmt.Sprintf("// %s retrieves all %ss.", op.Name, lcFirst(returnType))
 		if op.Pagination {
-			body, err = buildListPaginatedBody(op.Name, returnType, resultKey, endpoint, constName, op.PaginationVars)
+			body, err = buildListPaginatedBody(op.Name, returnType, resultKey, endpoint, constName, op.PaginationVars, rbacMap)
 		} else {
 			body = buildListSimpleBody(op.Name, returnType, resultKey, endpoint, constName)
 		}
@@ -581,25 +648,60 @@ func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constNam
 		methodName, returnType, tag, endpoint, constName, returnType, methodName, methodName)
 }
 
-func buildGetBody(methodName, returnType, resultKey, endpoint, constName, idField string) string {
+func buildGetBody(methodName, returnType, resultKey, endpoint, constName, idField, rbacMap string) string {
 	tag := bt + `json:"` + resultKey + `"` + bt
+	baseVarsLit := fmt.Sprintf("map[string]any{%q: %s}", idField, idField)
+	varAssign := "vars := " + baseVarsLit
+	if rbacMap != "" {
+		varAssign = "vars := mergeVars(" + baseVarsLit + ", " + rbacMap + ")"
+	}
 	return fmt.Sprintf(
-		"vars := map[string]any{%q: %s}\n\tvar result struct {\n\t\t%s *%s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn nil, fmt.Errorf(\"%s(%%s): %%w\", %s, err)\n\t}\n\treturn result.%s, nil",
-		idField, idField, methodName, returnType, tag, endpoint, constName, methodName, idField, methodName)
+		"%s\n\tvar result struct {\n\t\t%s *%s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn nil, fmt.Errorf(\"%s(%%s): %%w\", %s, err)\n\t}\n\treturn result.%s, nil",
+		varAssign, methodName, returnType, tag, endpoint, constName, methodName, idField, methodName)
 }
 
-func buildCreateBody(methodName, returnType, resultKey, endpoint, constName, buildFn string) string {
+func buildCreateBody(methodName, returnType, resultKey, endpoint, constName, buildFn, rbacMap string, wrappedInput bool) string {
 	tag := bt + `json:"` + resultKey + `"` + bt
+	var varAssign string
+	if wrappedInput {
+		baseVarsLit := `map[string]any{"input": ` + buildFn + `(input)}`
+		if rbacMap != "" {
+			varAssign = "vars := mergeVars(" + baseVarsLit + ", " + rbacMap + ")"
+		} else {
+			varAssign = "vars := " + baseVarsLit
+		}
+	} else {
+		if rbacMap != "" {
+			varAssign = "vars := mergeVars(" + buildFn + "(input), " + rbacMap + ")"
+		} else {
+			varAssign = "vars := " + buildFn + "(input)"
+		}
+	}
 	return fmt.Sprintf(
-		"vars := %s(input)\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
-		buildFn, methodName, returnType, tag, endpoint, constName, returnType, methodName, methodName)
+		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
+		varAssign, methodName, returnType, tag, endpoint, constName, returnType, methodName, methodName)
 }
 
-func buildUpdateBody(methodName, returnType, resultKey, endpoint, constName, buildFn, idField string) string {
+func buildUpdateBody(methodName, returnType, resultKey, endpoint, constName, buildFn, idField, rbacMap string, wrappedInput bool) string {
 	tag := bt + `json:"` + resultKey + `"` + bt
+	var varLines string
+	if wrappedInput {
+		baseVarsLit := fmt.Sprintf(`map[string]any{%q: %s, "input": `+buildFn+`(input)}`, idField, idField)
+		if rbacMap != "" {
+			varLines = "vars := mergeVars(" + baseVarsLit + ", " + rbacMap + ")"
+		} else {
+			varLines = "vars := " + baseVarsLit
+		}
+	} else {
+		if rbacMap != "" {
+			varLines = "vars := mergeVars(" + buildFn + "(input), " + rbacMap + ")\n\tvars[" + fmt.Sprintf("%q", idField) + "] = " + idField
+		} else {
+			varLines = "vars := " + buildFn + "(input)\n\tvars[" + fmt.Sprintf("%q", idField) + "] = " + idField
+		}
+	}
 	return fmt.Sprintf(
-		"vars := %s(input)\n\tvars[%q] = %s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s(%%s): %%w\", %s, err)\n\t}\n\treturn result.%s, nil",
-		buildFn, idField, idField, methodName, returnType, tag, endpoint, constName, returnType, methodName, idField, methodName)
+		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s(%%s): %%w\", %s, err)\n\t}\n\treturn result.%s, nil",
+		varLines, methodName, returnType, tag, endpoint, constName, returnType, methodName, idField, methodName)
 }
 
 func buildDeleteBody(methodName, endpoint, constName, idField string) string {
@@ -608,7 +710,7 @@ func buildDeleteBody(methodName, endpoint, constName, idField string) string {
 		idField, idField, endpoint, constName, methodName, idField)
 }
 
-func buildListPaginatedBody(methodName, returnType, resultKey, endpoint, constName string, paginationVars map[string]any) (string, error) {
+func buildListPaginatedBody(methodName, returnType, resultKey, endpoint, constName string, paginationVars map[string]any, rbacMap string) (string, error) {
 	localVar := lcFirst(returnType) + "s"
 	keys := make([]string, 0, len(paginationVars))
 	for k := range paginationVars {
@@ -621,9 +723,16 @@ func buildListPaginatedBody(methodName, returnType, resultKey, endpoint, constNa
 		varEntries = append(varEntries, fmt.Sprintf("\t\t%q: %s,", k, val))
 	}
 	varsStr := strings.Join(varEntries, "\n")
+	paginationMapLit := fmt.Sprintf("map[string]any{\n%s\n\t}", varsStr)
+	var varsExpr string
+	if rbacMap != "" {
+		varsExpr = "mergeVars(" + paginationMapLit + ", " + rbacMap + ")"
+	} else {
+		varsExpr = paginationMapLit
+	}
 	return fmt.Sprintf(
-		"%s, err := client.ListAll[%s](ctx, c.transport, %q, %s, map[string]any{\n%s\n\t}, %q)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn %s, nil",
-		localVar, returnType, endpoint, constName, varsStr, resultKey, methodName, localVar), nil
+		"%s, err := client.ListAll[%s](ctx, c.transport, %q, %s, %s, %q)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn %s, nil",
+		localVar, returnType, endpoint, constName, varsExpr, resultKey, methodName, localVar), nil
 }
 
 func buildListSimpleBody(methodName, returnType, resultKey, endpoint, constName string) string {

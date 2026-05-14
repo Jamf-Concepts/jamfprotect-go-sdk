@@ -59,10 +59,10 @@ mutation updateUnifiedLoggingFilter($uuid: ID!, $name: String!, $description: St
 const deleteUnifiedLoggingFilterMutation = `
 mutation deleteUnifiedLoggingFilter($uuid: ID!) {
 	deleteUnifiedLoggingFilter(uuid: $uuid) {
-		...UnifiedLoggingFilterFields
+		uuid
 	}
 }
-` + unifiedLoggingFilterFields
+`
 
 const listUnifiedLoggingFiltersQuery = `
 query listUnifiedLoggingFilters($nextToken: String, $direction: OrderDirection!, $field: UnifiedLoggingFiltersOrderField!, $pageSize: Int, $filter: UnifiedLoggingFiltersFilterInput) {

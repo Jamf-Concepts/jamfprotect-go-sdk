@@ -59,10 +59,10 @@ mutation updateApiClient($clientId: ID!, $name: String, $roleIds: [ID]) {
 const deleteApiClientMutation = `
 mutation deleteApiClient($clientId: ID!) {
 	deleteApiClient(clientId: $clientId) {
-		...ApiClientFields
+		clientId
 	}
 }
-` + apiClientFields
+`
 
 const listApiClientsQuery = `
 query listApiClients($nextToken: String, $direction: OrderDirection!, $field: ApiClientOrderField!, $pageSize: Int) {

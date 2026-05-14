@@ -19,14 +19,17 @@ type Config struct {
 
 // ResourceConfig defines one resource file to generate.
 type ResourceConfig struct {
-	File        string             `json:"file"`
-	TypeName    string             `json:"typeName"`              // Go type name
-	GQLTypeName string             `json:"gqlTypeName,omitempty"` // schema type name when it differs from TypeName
-	IDField     string             `json:"idField,omitempty"`     // primary key field; defaults to "id"
-	Fields      []string           `json:"fields"`
-	InputFields []string           `json:"inputFields,omitempty"` // override which schema input fields to include; defaults to all
-	NestedTypes []NestedTypeConfig `json:"nestedTypes,omitempty"`
-	Operations  []OperationConfig  `json:"operations"`
+	File            string            `json:"file"`
+	TypeName        string            `json:"typeName"`              // Go type name
+	GQLTypeName     string            `json:"gqlTypeName,omitempty"` // schema type name when it differs from TypeName
+	IDField         string            `json:"idField,omitempty"`     // primary key field; defaults to "id"
+	Fields          []string          `json:"fields"`
+	InputFields     []string          `json:"inputFields,omitempty"` // override which schema input fields to include; defaults to all
+	NestedTypes     []NestedTypeConfig `json:"nestedTypes,omitempty"`
+	Operations      []OperationConfig  `json:"operations"`
+	DirectiveFields map[string]string  `json:"directiveFields,omitempty"` // fieldName → GQL directive string (e.g. "@include(if: $RBAC_Plan)")
+	ExtraVars       map[string]string  `json:"extraVars,omitempty"`       // extra GQL var declarations added to non-delete operation signatures
+	RBACMap         string             `json:"rbacMap,omitempty"`         // package-level RBAC map name passed to mergeVars in method bodies
 }
 
 // SchemaTypeName returns the GraphQL schema type name for this resource.
@@ -47,18 +50,19 @@ type NestedTypeConfig struct {
 
 // OperationConfig defines one GraphQL operation on a resource.
 type OperationConfig struct {
-	Name             string         `json:"name"`
-	GQLName          string         `json:"gqlName,omitempty"`
-	Kind             string         `json:"kind,omitempty"`
-	Endpoint         string         `json:"endpoint,omitempty"`
-	InputType        string         `json:"inputType,omitempty"`
-	InputTypeGoName  string         `json:"inputTypeGoName,omitempty"` // Go struct name when it differs from InputType
-	RBAC             string         `json:"rbac,omitempty"`
-	Pagination       bool           `json:"pagination,omitempty"`
-	PaginationVars   map[string]any `json:"paginationVars,omitempty"`
-	ReturnType       string         `json:"returnType,omitempty"`
-	ReturnNullable   *bool          `json:"returnNullable,omitempty"`
-	ResultKey        string         `json:"resultKey,omitempty"`
+	Name            string         `json:"name"`
+	GQLName         string         `json:"gqlName,omitempty"`
+	Kind            string         `json:"kind,omitempty"`
+	Endpoint        string         `json:"endpoint,omitempty"`
+	InputType       string         `json:"inputType,omitempty"`
+	InputTypeGoName string         `json:"inputTypeGoName,omitempty"` // Go struct name when it differs from InputType
+	RBAC            string         `json:"rbac,omitempty"`
+	Pagination      bool           `json:"pagination,omitempty"`
+	PaginationVars  map[string]any `json:"paginationVars,omitempty"`
+	ReturnType      string         `json:"returnType,omitempty"`
+	ReturnNullable  *bool          `json:"returnNullable,omitempty"`
+	ResultKey       string         `json:"resultKey,omitempty"`
+	WrappedInput    bool           `json:"wrappedInput,omitempty"` // use $input: TypeName! single var instead of expanding fields
 }
 
 func loadConfig(path string) (Config, error) {
