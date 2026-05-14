@@ -127,16 +127,17 @@ func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, er
 }
 
 func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[string][]string) (string, error) {
-	def := schema.Types[res.TypeName]
+	schemaTypeName := res.SchemaTypeName()
+	def := schema.Types[schemaTypeName]
 	if def == nil {
-		return "", fmt.Errorf("type %q not found in schema", res.TypeName)
+		return "", fmt.Errorf("type %q not found in schema", schemaTypeName)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "\nfragment %sFields on %s {\n", res.TypeName, res.TypeName)
+	fmt.Fprintf(&b, "\nfragment %sFields on %s {\n", res.TypeName, schemaTypeName)
 	for _, fieldName := range res.Fields {
 		f := def.Fields.ForName(fieldName)
 		if f == nil {
-			return "", fmt.Errorf("field %q not on type %s", fieldName, res.TypeName)
+			return "", fmt.Errorf("field %q not on type %s", fieldName, schemaTypeName)
 		}
 		base := baseTypeName(f.Type)
 		fieldDef := schema.Types[base]
@@ -162,9 +163,10 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 }
 
 func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames map[string]string, nestedFieldRenames map[string]map[string]string, nestedFieldLists map[string][]string, scalars map[string]string) (IRStruct, []IRStruct, error) {
-	def := schema.Types[res.TypeName]
+	schemaTypeName := res.SchemaTypeName()
+	def := schema.Types[schemaTypeName]
 	if def == nil {
-		return IRStruct{}, nil, fmt.Errorf("type %q not found in schema", res.TypeName)
+		return IRStruct{}, nil, fmt.Errorf("type %q not found in schema", schemaTypeName)
 	}
 
 	var mainFields []IRField
@@ -174,7 +176,7 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 	for _, fieldName := range res.Fields {
 		f := def.Fields.ForName(fieldName)
 		if f == nil {
-			return IRStruct{}, nil, fmt.Errorf("field %q not on type %s", fieldName, res.TypeName)
+			return IRStruct{}, nil, fmt.Errorf("field %q not on type %s", fieldName, schemaTypeName)
 		}
 		goType := resolveGoType(f.Type, schema, scalars, nestedGoNames)
 		mainFields = append(mainFields, IRField{
@@ -277,16 +279,20 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 			})
 		}
 
-		baseName := strings.TrimSuffix(op.InputType, "Input")
+		goInputName := op.InputType
+		if op.InputTypeGoName != "" {
+			goInputName = op.InputTypeGoName
+		}
+		baseName := strings.TrimSuffix(goInputName, "Input")
 		inputTypes = append(inputTypes, IRStruct{
-			Comment: fmt.Sprintf("// %s is the input for %s operations.", op.InputType, lcFirst(baseName)),
-			Name:    op.InputType,
+			Comment: fmt.Sprintf("// %s is the input for %s operations.", goInputName, lcFirst(baseName)),
+			Name:    goInputName,
 			Fields:  fields,
 			IsInput: true,
 		})
 		buildVarsFuncs = append(buildVarsFuncs, IRBuildVarsFunc{
 			Name:      "build" + baseName + "Variables",
-			InputType: op.InputType,
+			InputType: goInputName,
 			Vars:      buildVars,
 		})
 	}
@@ -512,15 +518,23 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		body = buildGetBody(op.Name, returnType, resultKey, endpoint, constName, idField)
 
 	case "create":
-		sig = fmt.Sprintf("(ctx context.Context, input %s) (%s, error)", op.InputType, returnType)
+		goInputName := op.InputType
+		if op.InputTypeGoName != "" {
+			goInputName = op.InputTypeGoName
+		}
+		sig = fmt.Sprintf("(ctx context.Context, input %s) (%s, error)", goInputName, returnType)
 		doc = fmt.Sprintf("// %s creates a new %s.", op.Name, lcFirst(returnType))
-		buildFn := "build" + strings.TrimSuffix(op.InputType, "Input") + "Variables"
+		buildFn := "build" + strings.TrimSuffix(goInputName, "Input") + "Variables"
 		body = buildCreateBody(op.Name, returnType, resultKey, endpoint, constName, buildFn)
 
 	case "update":
-		sig = fmt.Sprintf("(ctx context.Context, %s string, input %s) (%s, error)", idField, op.InputType, returnType)
+		goInputName := op.InputType
+		if op.InputTypeGoName != "" {
+			goInputName = op.InputTypeGoName
+		}
+		sig = fmt.Sprintf("(ctx context.Context, %s string, input %s) (%s, error)", idField, goInputName, returnType)
 		doc = fmt.Sprintf("// %s updates an existing %s.", op.Name, lcFirst(returnType))
-		buildFn := "build" + strings.TrimSuffix(op.InputType, "Input") + "Variables"
+		buildFn := "build" + strings.TrimSuffix(goInputName, "Input") + "Variables"
 		body = buildUpdateBody(op.Name, returnType, resultKey, endpoint, constName, buildFn, idField)
 
 	case "delete":
