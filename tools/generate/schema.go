@@ -50,7 +50,9 @@ var goInitialisms = map[string]bool{
 
 // goCustomCasing handles plural/mixed initialisms that aren't pure uppercase (e.g. "ids" → "IDs").
 var goCustomCasing = map[string]string{
-	"ids": "IDs",
+	"ids":  "IDs",
+	"pppc": "PPPC",
+	"csr":  "CSR",
 }
 
 // toPascalCase converts a camelCase identifier to Go PascalCase,
@@ -85,22 +87,30 @@ func lcFirst(s string) string {
 	return string(r)
 }
 
-// splitCamelWords splits a camelCase string into words at lower→upper case transitions.
+// splitCamelWords splits a camelCase or snake_case string into words.
+// Splits at lower→upper transitions (camelCase) and at underscore boundaries.
 func splitCamelWords(s string) []string {
+	// Split on underscores first, then split each segment on camelCase boundaries.
+	segments := strings.Split(s, "_")
 	var words []string
-	var cur strings.Builder
-	runes := []rune(s)
-	for i, r := range runes {
-		if i > 0 && unicode.IsUpper(r) && !unicode.IsUpper(runes[i-1]) {
-			if cur.Len() > 0 {
-				words = append(words, cur.String())
-				cur.Reset()
-			}
+	for _, seg := range segments {
+		if seg == "" {
+			continue
 		}
-		cur.WriteRune(r)
-	}
-	if cur.Len() > 0 {
-		words = append(words, cur.String())
+		runes := []rune(seg)
+		var cur strings.Builder
+		for i, r := range runes {
+			if i > 0 && unicode.IsUpper(r) && !unicode.IsUpper(runes[i-1]) {
+				if cur.Len() > 0 {
+					words = append(words, cur.String())
+					cur.Reset()
+				}
+			}
+			cur.WriteRune(r)
+		}
+		if cur.Len() > 0 {
+			words = append(words, cur.String())
+		}
 	}
 	return words
 }
@@ -114,12 +124,18 @@ func baseTypeName(t *ast.Type) string {
 }
 
 // resolveGoType maps a GraphQL type to its Go equivalent for response struct fields.
-// Nullability is ignored — struct fields are always value types.
+// Nullable non-list object/interface fields are emitted as pointer types.
 func resolveGoType(t *ast.Type, schema *ast.Schema, scalars map[string]string, nestedOverrides map[string]string) string {
 	if t.Elem != nil {
 		return "[]" + resolveNamedGoType(t.Elem.NamedType, schema, scalars, nestedOverrides)
 	}
-	return resolveNamedGoType(t.NamedType, schema, scalars, nestedOverrides)
+	goType := resolveNamedGoType(t.NamedType, schema, scalars, nestedOverrides)
+	if !t.NonNull {
+		if def := schema.Types[t.NamedType]; def != nil && (def.Kind == ast.Object || def.Kind == ast.Interface) {
+			return "*" + goType
+		}
+	}
+	return goType
 }
 
 // resolveInputGoType maps a GraphQL type to its Go equivalent for input struct fields.
