@@ -31,7 +31,9 @@ type ResourceConfig struct {
 	ExtraVars           map[string]string  `json:"extraVars,omitempty"`           // extra GQL var declarations added to non-delete operation signatures
 	ExtraVarValues      map[string]any     `json:"extraVarValues,omitempty"`      // static var values merged into get/create/update method bodies
 	RBACMap             string             `json:"rbacMap,omitempty"`             // package-level RBAC map name passed to mergeVars in method bodies
-	NullableInputFields []string           `json:"nullableInputFields,omitempty"` // input fields that should use pointer types despite being scalars
+	NullableInputFields  []string           `json:"nullableInputFields,omitempty"`  // input fields that should use pointer types despite being scalars
+	InputTypeRenames     map[string]string  `json:"inputTypeRenames,omitempty"`     // schema InputObject name → Go type name for nested generated input types
+	ExtraResponseTypes   []ExtraResponseType `json:"extraResponseTypes,omitempty"`  // additional Go response types not tied to a field (e.g. list-item types)
 }
 
 // SchemaTypeName returns the GraphQL schema type name for this resource.
@@ -40,6 +42,13 @@ func (r ResourceConfig) SchemaTypeName() string {
 		return r.GQLTypeName
 	}
 	return r.TypeName
+}
+
+// ExtraResponseType generates an additional Go response struct not tied to a field of the main type.
+type ExtraResponseType struct {
+	GoName     string   `json:"goName"`
+	SchemaName string   `json:"schemaName"`
+	Fields     []string `json:"fields,omitempty"` // restrict to a subset of schema fields
 }
 
 // NestedTypeConfig overrides Go naming for a nested schema type within a resource.
@@ -64,8 +73,9 @@ type OperationConfig struct {
 	ReturnType      string         `json:"returnType,omitempty"`
 	ReturnNullable  *bool          `json:"returnNullable,omitempty"`
 	ResultKey       string         `json:"resultKey,omitempty"`
-	WrappedInput    bool           `json:"wrappedInput,omitempty"`  // use $input: TypeName! single var instead of expanding fields
-	InputFields     []string       `json:"inputFields,omitempty"`   // per-op override for which schema input fields appear in the mutation
+	WrappedInput    bool           `json:"wrappedInput,omitempty"`   // use $input: TypeName! single var instead of expanding fields
+	InputFields     []string       `json:"inputFields,omitempty"`    // per-op override for which schema input fields appear in the mutation
+	ListItemFields  []string       `json:"listItemFields,omitempty"` // inline fields for list items instead of the fragment (for minimal list queries)
 }
 
 func loadConfig(path string) (Config, error) {

@@ -484,6 +484,102 @@
           }
         }
       ]
+    },
+    {
+      "file": "exception_set.go",
+      "typeName": "ExceptionSet",
+      "idField": "uuid",
+      "fields": ["uuid", "name", "description", "exceptions", "esExceptions", "created", "updated", "managed"],
+      "nestedTypes": [
+        {
+          "schemaName": "Exception",
+          "goName": "Exception",
+          "fields": ["type", "value", "appSigningInfo", "ignoreActivity", "analyticTypes", "analytic", "created", "updated"]
+        },
+        {
+          "schemaName": "EsException",
+          "goName": "EsException",
+          "fields": ["type", "value", "appSigningInfo", "ignoreActivity", "ignoreListType", "ignoreListSubType", "eventType", "created", "updated"]
+        },
+        {
+          "schemaName": "ExceptionAppSigningInfo",
+          "goName": "AppSigningInfo",
+          "fields": ["appId", "teamId"]
+        },
+        {
+          "schemaName": "Analytic",
+          "goName": "AnalyticRef",
+          "fields": ["name", "uuid"]
+        }
+      ],
+      "directiveFields": {
+        "exceptions": "@skip(if: $minimal)",
+        "esExceptions": "@skip(if: $minimal)"
+      },
+      "extraVars": {
+        "minimal": "Boolean!"
+      },
+      "extraVarValues": {
+        "minimal": false
+      },
+      "inputTypeRenames": {
+        "ExceptionAppSigningInfoInput": "AppSigningInfoInput"
+      },
+      "extraResponseTypes": [
+        {
+          "goName": "ExceptionSetListItem",
+          "schemaName": "ExceptionSet",
+          "fields": ["uuid", "name", "managed"]
+        }
+      ],
+      "operations": [
+        {
+          "name": "CreateExceptionSet",
+          "gqlName": "createExceptionSet",
+          "kind": "create",
+          "endpoint": "/app",
+          "resultKey": "createExceptionSet",
+          "inputType": "ExceptionSetInput"
+        },
+        {
+          "name": "GetExceptionSet",
+          "gqlName": "getExceptionSet",
+          "kind": "get",
+          "endpoint": "/app",
+          "resultKey": "getExceptionSet"
+        },
+        {
+          "name": "UpdateExceptionSet",
+          "gqlName": "updateExceptionSet",
+          "kind": "update",
+          "endpoint": "/app",
+          "resultKey": "updateExceptionSet",
+          "inputType": "ExceptionSetInput"
+        },
+        {
+          "name": "DeleteExceptionSet",
+          "gqlName": "deleteExceptionSet",
+          "kind": "delete",
+          "endpoint": "/app",
+          "resultKey": "deleteExceptionSet"
+        },
+        {
+          "name": "ListExceptionSets",
+          "gqlName": "listExceptionSets",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listExceptionSets",
+          "returnType": "ExceptionSetListItem",
+          "pagination": true,
+          "paginationVars": {
+            "direction": "DESC",
+            "field": "created",
+            "filter": {},
+            "pageSize": 100
+          },
+          "listItemFields": ["uuid", "name", "managed"]
+        }
+      ]
     }
   ]
 }

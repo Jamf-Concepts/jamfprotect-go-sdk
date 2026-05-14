@@ -27,7 +27,7 @@ const {{.ConstName}} = `{{.QueryStr}}`
 {{range .InputTypes}}
 {{.Comment}}
 type {{.Name}} struct {
-{{range .Fields}}	{{.Name}} {{.Type}}
+{{range .Fields}}	{{.Name}} {{.Type}}{{if .JSONTag}} `json:"{{.JSONTag}}"`{{end}}
 {{end}}}
 {{end}}
 // ── Response types ────────────────────────────────────────────────────────────

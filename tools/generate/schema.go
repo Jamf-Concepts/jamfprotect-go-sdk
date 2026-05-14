@@ -139,11 +139,18 @@ func resolveGoType(t *ast.Type, schema *ast.Schema, scalars map[string]string, n
 }
 
 // resolveInputGoType maps a GraphQL type to its Go equivalent for input struct fields.
+// Nullable InputObject fields are emitted as pointer types.
 func resolveInputGoType(t *ast.Type, schema *ast.Schema, scalars map[string]string) string {
 	if t.Elem != nil {
 		return "[]" + resolveInputNamedGoType(t.Elem.NamedType, schema, scalars)
 	}
-	return resolveInputNamedGoType(t.NamedType, schema, scalars)
+	goType := resolveInputNamedGoType(t.NamedType, schema, scalars)
+	if !t.NonNull {
+		if def := schema.Types[t.NamedType]; def != nil && def.Kind == ast.InputObject {
+			return "*" + goType
+		}
+	}
+	return goType
 }
 
 func resolveNamedGoType(name string, schema *ast.Schema, scalars map[string]string, nestedOverrides map[string]string) string {
