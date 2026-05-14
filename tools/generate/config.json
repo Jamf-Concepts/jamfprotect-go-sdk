@@ -127,6 +127,61 @@
       ]
     },
     {
+      "file": "custom_prevent_list.go",
+      "typeName": "CustomPreventList",
+      "gqlTypeName": "PreventList",
+      "fields": ["id", "name", "description", "type", "tags", "list", "count", "created"],
+      "inputFields": ["name", "description", "type", "tags", "list"],
+      "operations": [
+        {
+          "name": "GetCustomPreventList",
+          "gqlName": "getPreventList",
+          "kind": "get",
+          "endpoint": "/graphql",
+          "resultKey": "getPreventList"
+        },
+        {
+          "name": "CreateCustomPreventList",
+          "gqlName": "createPreventList",
+          "kind": "create",
+          "endpoint": "/graphql",
+          "resultKey": "createPreventList",
+          "inputType": "PreventListInput",
+          "inputTypeGoName": "CustomPreventListInput"
+        },
+        {
+          "name": "UpdateCustomPreventList",
+          "gqlName": "updatePreventList",
+          "kind": "update",
+          "endpoint": "/graphql",
+          "resultKey": "updatePreventList",
+          "inputType": "PreventListInput",
+          "inputTypeGoName": "CustomPreventListInput"
+        },
+        {
+          "name": "DeleteCustomPreventList",
+          "gqlName": "deletePreventList",
+          "kind": "delete",
+          "endpoint": "/graphql",
+          "resultKey": "deletePreventList"
+        },
+        {
+          "name": "ListCustomPreventLists",
+          "gqlName": "listPreventLists",
+          "kind": "list",
+          "endpoint": "/graphql",
+          "resultKey": "listPreventLists",
+          "pagination": true,
+          "paginationVars": {
+            "direction": "DESC",
+            "field": "created",
+            "filter": {},
+            "pageSize": 100
+          }
+        }
+      ]
+    },
+    {
       "file": "role.go",
       "typeName": "Role",
       "fields": ["id", "name", "permissions", "created", "updated"],

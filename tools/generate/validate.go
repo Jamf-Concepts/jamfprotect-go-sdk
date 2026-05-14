@@ -21,14 +21,15 @@ func validateConfig(schema *ast.Schema, cfg Config) error {
 }
 
 func validateResource(schema *ast.Schema, res ResourceConfig) error {
-	def := schema.Types[res.TypeName]
+	schemaTypeName := res.SchemaTypeName()
+	def := schema.Types[schemaTypeName]
 	if def == nil {
-		return fmt.Errorf("type %q not found in schema", res.TypeName)
+		return fmt.Errorf("type %q not found in schema", schemaTypeName)
 	}
 
 	for _, f := range res.Fields {
 		if def.Fields.ForName(f) == nil {
-			return fmt.Errorf("field %q not found on type %s", f, res.TypeName)
+			return fmt.Errorf("field %q not found on type %s", f, schemaTypeName)
 		}
 	}
 
