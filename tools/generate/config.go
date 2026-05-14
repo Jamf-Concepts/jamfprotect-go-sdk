@@ -32,6 +32,7 @@ type ResourceConfig struct {
 	ExtraVarValues      map[string]any     `json:"extraVarValues,omitempty"`      // static var values merged into get/create/update method bodies
 	RBACMap             string             `json:"rbacMap,omitempty"`             // package-level RBAC map name passed to mergeVars in method bodies
 	NullableInputFields  []string           `json:"nullableInputFields,omitempty"`  // input fields that should use pointer types despite being scalars
+	OptionalInputFields  []string           `json:"optionalInputFields,omitempty"`  // input fields omitted from buildVars when zero/nil (conditional inclusion)
 	InputTypeRenames     map[string]string  `json:"inputTypeRenames,omitempty"`     // schema InputObject name → Go type name for nested generated input types
 	ExtraResponseTypes   []ExtraResponseType `json:"extraResponseTypes,omitempty"`  // additional Go response types not tied to a field (e.g. list-item types)
 }
