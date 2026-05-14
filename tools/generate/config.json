@@ -1,0 +1,132 @@
+{
+  "schemaPath": "../../testing/schema.graphql",
+  "outputDir":  "../../jamfprotect",
+  "scalars": {
+    "AWSDateTime":  "string",
+    "AWSJSON":      "string",
+    "AWSEmail":     "string",
+    "AWSIPAddress": "string",
+    "AWSPhone":     "string",
+    "AWSURL":       "string",
+    "AWSDate":      "string",
+    "AWSTimestamp": "string",
+    "ID":           "string",
+    "Long":         "int64",
+    "Float":        "float64"
+  },
+  "resources": [
+    {
+      "file": "unified_logging_filter.go",
+      "typeName": "UnifiedLoggingFilter",
+      "idField": "uuid",
+      "fields": ["uuid", "name", "description", "created", "updated", "filter", "tags", "enabled"],
+      "inputFields": ["name", "description", "filter", "tags", "enabled"],
+      "operations": [
+        {
+          "name": "GetUnifiedLoggingFilter",
+          "gqlName": "getUnifiedLoggingFilter",
+          "kind": "get",
+          "endpoint": "/graphql",
+          "resultKey": "getUnifiedLoggingFilter"
+        },
+        {
+          "name": "CreateUnifiedLoggingFilter",
+          "gqlName": "createUnifiedLoggingFilter",
+          "kind": "create",
+          "endpoint": "/graphql",
+          "resultKey": "createUnifiedLoggingFilter",
+          "inputType": "UnifiedLoggingFilterInput"
+        },
+        {
+          "name": "UpdateUnifiedLoggingFilter",
+          "gqlName": "updateUnifiedLoggingFilter",
+          "kind": "update",
+          "endpoint": "/graphql",
+          "resultKey": "updateUnifiedLoggingFilter",
+          "inputType": "UnifiedLoggingFilterInput"
+        },
+        {
+          "name": "DeleteUnifiedLoggingFilter",
+          "gqlName": "deleteUnifiedLoggingFilter",
+          "kind": "delete",
+          "endpoint": "/graphql",
+          "resultKey": "deleteUnifiedLoggingFilter"
+        },
+        {
+          "name": "ListUnifiedLoggingFilters",
+          "gqlName": "listUnifiedLoggingFilters",
+          "kind": "list",
+          "endpoint": "/graphql",
+          "resultKey": "listUnifiedLoggingFilters",
+          "pagination": true,
+          "paginationVars": {
+            "direction": "ASC",
+            "field": "name",
+            "filter": {},
+            "pageSize": 100
+          }
+        }
+      ]
+    },
+    {
+      "file": "role.go",
+      "typeName": "Role",
+      "fields": ["id", "name", "permissions", "created", "updated"],
+      "nestedTypes": [
+        {
+          "schemaName": "RbacPermissions",
+          "goName": "RolePermissions",
+          "fieldRenames": {
+            "R": "Read",
+            "W": "Write"
+          }
+        }
+      ],
+      "operations": [
+        {
+          "name": "GetRole",
+          "gqlName": "getRole",
+          "kind": "get",
+          "endpoint": "/app",
+          "resultKey": "getRole"
+        },
+        {
+          "name": "CreateRole",
+          "gqlName": "createRole",
+          "kind": "create",
+          "endpoint": "/app",
+          "resultKey": "createRole",
+          "inputType": "RoleInput"
+        },
+        {
+          "name": "UpdateRole",
+          "gqlName": "updateRole",
+          "kind": "update",
+          "endpoint": "/app",
+          "resultKey": "updateRole",
+          "inputType": "RoleInput"
+        },
+        {
+          "name": "DeleteRole",
+          "gqlName": "deleteRole",
+          "kind": "delete",
+          "endpoint": "/app",
+          "resultKey": "deleteRole"
+        },
+        {
+          "name": "ListRoles",
+          "gqlName": "listRoles",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listRoles",
+          "pagination": true,
+          "paginationVars": {
+            "pageSize": 100,
+            "direction": "ASC",
+            "field": "name"
+          }
+        }
+      ]
+    }
+  ]
+}
