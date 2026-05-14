@@ -59,10 +59,10 @@ mutation updateRole($id: ID!, $name: String, $readResources: [RBAC_RESOURCE!]!, 
 const deleteRoleMutation = `
 mutation deleteRole($id: ID!) {
 	deleteRole(id: $id) {
-		...RoleFields
+		id
 	}
 }
-` + roleFields
+`
 
 const listRolesQuery = `
 query listRoles($nextToken: String, $direction: OrderDirection!, $field: RoleOrderField!, $pageSize: Int) {

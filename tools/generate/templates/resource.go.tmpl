@@ -17,7 +17,11 @@ import (
 
 const {{.FragConst}} = `{{.Fragment}}`
 {{range .Operations}}
+{{- if .FragConst}}
 const {{.ConstName}} = `{{.QueryStr}}` + {{.FragConst}}
+{{- else}}
+const {{.ConstName}} = `{{.QueryStr}}`
+{{- end}}
 {{end}}
 // ── Input types ───────────────────────────────────────────────────────────────
 {{range .InputTypes}}

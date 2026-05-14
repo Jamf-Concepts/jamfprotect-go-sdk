@@ -182,6 +182,75 @@
       ]
     },
     {
+      "file": "telemetry_v2.go",
+      "typeName": "TelemetryV2",
+      "idField": "id",
+      "fields": ["id", "name", "description", "created", "updated", "logFiles", "logFileCollection", "performanceMetrics", "plans", "events", "fileHashing"],
+      "nestedTypes": [
+        {
+          "schemaName": "Plan",
+          "goName": "TelemetryV2Plan",
+          "fields": ["id", "name"]
+        }
+      ],
+      "directiveFields": {
+        "plans": "@include(if: $RBAC_Plan)"
+      },
+      "extraVars": {
+        "RBAC_Plan": "Boolean!"
+      },
+      "rbacMap": "rbacPlan",
+      "operations": [
+        {
+          "name": "CreateTelemetryV2",
+          "gqlName": "createTelemetryV2",
+          "kind": "create",
+          "endpoint": "/app",
+          "resultKey": "createTelemetryV2",
+          "inputType": "TelemetryInputV2",
+          "inputTypeGoName": "TelemetryV2Input",
+          "wrappedInput": true
+        },
+        {
+          "name": "GetTelemetryV2",
+          "gqlName": "getTelemetryV2",
+          "kind": "get",
+          "endpoint": "/app",
+          "resultKey": "getTelemetryV2"
+        },
+        {
+          "name": "UpdateTelemetryV2",
+          "gqlName": "updateTelemetryV2",
+          "kind": "update",
+          "endpoint": "/app",
+          "resultKey": "updateTelemetryV2",
+          "inputType": "TelemetryInputV2",
+          "inputTypeGoName": "TelemetryV2Input",
+          "wrappedInput": true
+        },
+        {
+          "name": "DeleteTelemetryV2",
+          "gqlName": "deleteTelemetryV2",
+          "kind": "delete",
+          "endpoint": "/app",
+          "resultKey": "deleteTelemetryV2"
+        },
+        {
+          "name": "ListTelemetriesV2",
+          "gqlName": "listTelemetriesV2",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listTelemetriesV2",
+          "pagination": true,
+          "paginationVars": {
+            "direction": "DESC",
+            "field": "created",
+            "pageSize": 100
+          }
+        }
+      ]
+    },
+    {
       "file": "downloads.go",
       "typeName": "OrganizationDownloads",
       "gqlTypeName": "OrganizationDownload",

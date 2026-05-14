@@ -59,10 +59,10 @@ mutation updatePreventList($id: ID!, $description: String, $list: [String]!, $na
 const deleteCustomPreventListMutation = `
 mutation deletePreventList($id: ID!) {
 	deletePreventList(id: $id) {
-		...CustomPreventListFields
+		id
 	}
 }
-` + customPreventListFields
+`
 
 const listCustomPreventListsQuery = `
 query listPreventLists($nextToken: String, $direction: OrderDirection!, $field: PreventListOrderField!, $pageSize: Int, $filter: PreventListFilterInput) {
