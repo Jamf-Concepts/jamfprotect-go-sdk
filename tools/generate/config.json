@@ -486,6 +486,68 @@
       ]
     },
     {
+      "file": "analytic.go",
+      "typeName": "Analytic",
+      "idField": "uuid",
+      "fields": ["uuid", "hash", "name", "label", "inputType", "filter", "description", "longDescription", "created", "updated", "startup", "actions", "analyticActions", "tenantActions", "tags", "level", "severity", "tenantSeverity", "snapshotFiles", "context", "categories", "jamf", "remediation", "matchReason"],
+      "nestedTypes": [
+        {"schemaName": "AnalyticActions", "goName": "AnalyticAction"},
+        {"schemaName": "AnalyticContext", "goName": "AnalyticContext"}
+      ],
+      "nullableInputFields": ["startup"],
+      "optionalInputFields": ["label", "longDescription", "startup", "remediation", "matchReason"],
+      "inputTypeRenames": {
+        "AnalyticActionsInput": "AnalyticActionInput"
+      },
+      "operations": [
+        {
+          "name": "CreateAnalytic",
+          "gqlName": "createAnalytic",
+          "kind": "create",
+          "endpoint": "/app",
+          "resultKey": "createAnalytic",
+          "inputType": "AnalyticInput"
+        },
+        {
+          "name": "GetAnalytic",
+          "gqlName": "getAnalytic",
+          "kind": "get",
+          "endpoint": "/graphql",
+          "resultKey": "getAnalytic"
+        },
+        {
+          "name": "UpdateAnalytic",
+          "gqlName": "updateAnalytic",
+          "kind": "update",
+          "endpoint": "/app",
+          "resultKey": "updateAnalytic",
+          "inputType": "AnalyticInput"
+        },
+        {
+          "name": "UpdateInternalAnalytic",
+          "gqlName": "updateInternalAnalytic",
+          "kind": "update",
+          "endpoint": "/app",
+          "resultKey": "updateInternalAnalytic",
+          "inputType": "InternalAnalyticInput"
+        },
+        {
+          "name": "DeleteAnalytic",
+          "gqlName": "deleteAnalytic",
+          "kind": "delete",
+          "endpoint": "/app",
+          "resultKey": "deleteAnalytic"
+        },
+        {
+          "name": "ListAnalytics",
+          "gqlName": "listAnalytics",
+          "kind": "list",
+          "endpoint": "/graphql",
+          "resultKey": "listAnalytics"
+        }
+      ]
+    },
+    {
       "file": "exception_set.go",
       "typeName": "ExceptionSet",
       "idField": "uuid",

@@ -60,12 +60,15 @@ type IRBuildVarsFunc struct {
 	Name      string // e.g. "buildRoleVariables"
 	InputType string // e.g. "RoleInput"
 	Vars      []BuildVar
+	Body      string // pre-built function body; replaces Vars in the template
 }
 
 // BuildVar is one key-value entry in a buildXxxVariables return literal.
 type BuildVar struct {
 	Key      string // GQL variable name, e.g. "readResources"
 	GoAccess string // Go field name on the input struct, e.g. "ReadResources"
+	Optional bool   // if true, only include when non-zero
+	IsPtr    bool   // if true, dereference with *input.X (only meaningful when Optional)
 }
 
 func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, error) {
@@ -348,6 +351,12 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 		nullableFields[f] = true
 	}
 
+	// Build a set of optional input fields for conditional inclusion in buildVarsFunc.
+	optionalFields := make(map[string]bool)
+	for _, f := range res.OptionalInputFields {
+		optionalFields[f] = true
+	}
+
 	for _, op := range res.Operations {
 		if op.InputType == "" || seen[op.InputType] {
 			continue
@@ -377,9 +386,12 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 				Name: goName,
 				Type: goType,
 			})
+			isOptional := optionalFields[f.Name]
 			buildVars = append(buildVars, BuildVar{
 				Key:      f.Name,
 				GoAccess: goName,
+				Optional: isOptional,
+				IsPtr:    isOptional && strings.HasPrefix(goType, "*"),
 			})
 		}
 
@@ -398,6 +410,7 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 			Name:      "build" + baseName + "Variables",
 			InputType: goInputName,
 			Vars:      buildVars,
+			Body:      buildVarsFuncBody(buildVars),
 		})
 
 		// Recursively generate nested InputObject types (with json tags, in dependency order).
@@ -480,6 +493,44 @@ func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]
 		})
 	}
 	return result, nil
+}
+
+// buildVarsFuncBody produces the Go body of a buildXxxVariables function. Required vars go into
+// the map literal unconditionally; optional vars are guarded by nil/zero-value checks.
+func buildVarsFuncBody(vars []BuildVar) string {
+	var required, optional []BuildVar
+	for _, v := range vars {
+		if v.Optional {
+			optional = append(optional, v)
+		} else {
+			required = append(required, v)
+		}
+	}
+
+	var b strings.Builder
+	if len(optional) == 0 {
+		b.WriteString("\treturn map[string]any{\n")
+		for _, v := range required {
+			fmt.Fprintf(&b, "\t\t%q: input.%s,\n", v.Key, v.GoAccess)
+		}
+		b.WriteString("\t}\n")
+		return b.String()
+	}
+
+	b.WriteString("\tvars := map[string]any{\n")
+	for _, v := range required {
+		fmt.Fprintf(&b, "\t\t%q: input.%s,\n", v.Key, v.GoAccess)
+	}
+	b.WriteString("\t}\n")
+	for _, v := range optional {
+		if v.IsPtr {
+			fmt.Fprintf(&b, "\tif input.%s != nil {\n\t\tvars[%q] = *input.%s\n\t}\n", v.GoAccess, v.Key, v.GoAccess)
+		} else {
+			fmt.Fprintf(&b, "\tif input.%s != \"\" {\n\t\tvars[%q] = input.%s\n\t}\n", v.GoAccess, v.Key, v.GoAccess)
+		}
+	}
+	b.WriteString("\treturn vars\n")
+	return b.String()
 }
 
 func buildOperations(schema *ast.Schema, res ResourceConfig, fragConst string, scalars map[string]string) ([]IROperation, error) {
