@@ -408,6 +408,82 @@
           }
         }
       ]
+    },
+    {
+      "file": "group.go",
+      "typeName": "Group",
+      "idField": "id",
+      "fields": ["id", "name", "connection", "assignedRoles", "accessGroup", "created", "updated"],
+      "nestedTypes": [
+        {
+          "schemaName": "Connection",
+          "goName": "GroupConnection",
+          "fields": ["id", "name"]
+        },
+        {
+          "schemaName": "Role",
+          "goName": "GroupRole",
+          "fields": ["id", "name"]
+        }
+      ],
+      "directiveFields": {
+        "connection": "@include(if: $RBAC_Connection)",
+        "assignedRoles": "@include(if: $RBAC_Role)"
+      },
+      "extraVars": {
+        "RBAC_Connection": "Boolean!",
+        "RBAC_Role": "Boolean!"
+      },
+      "rbacMap": "rbacGroup",
+      "nullableInputFields": ["connectionId"],
+      "operations": [
+        {
+          "name": "CreateGroup",
+          "gqlName": "createGroup",
+          "kind": "create",
+          "endpoint": "/app",
+          "resultKey": "createGroup",
+          "inputType": "GroupCreateInput",
+          "inputTypeGoName": "GroupInput"
+        },
+        {
+          "name": "GetGroup",
+          "gqlName": "getGroup",
+          "kind": "get",
+          "endpoint": "/app",
+          "resultKey": "getGroup"
+        },
+        {
+          "name": "UpdateGroup",
+          "gqlName": "updateGroup",
+          "kind": "update",
+          "endpoint": "/app",
+          "resultKey": "updateGroup",
+          "inputType": "GroupCreateInput",
+          "inputTypeGoName": "GroupInput",
+          "inputFields": ["name", "accessGroup", "roleIds"]
+        },
+        {
+          "name": "DeleteGroup",
+          "gqlName": "deleteGroup",
+          "kind": "delete",
+          "endpoint": "/app",
+          "resultKey": "deleteGroup"
+        },
+        {
+          "name": "ListGroups",
+          "gqlName": "listGroups",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listGroups",
+          "pagination": true,
+          "paginationVars": {
+            "direction": "ASC",
+            "field": "name",
+            "pageSize": 100
+          }
+        }
+      ]
     }
   ]
 }

@@ -27,10 +27,11 @@ type ResourceConfig struct {
 	InputFields     []string          `json:"inputFields,omitempty"` // override which schema input fields to include; defaults to all
 	NestedTypes     []NestedTypeConfig `json:"nestedTypes,omitempty"`
 	Operations      []OperationConfig  `json:"operations"`
-	DirectiveFields  map[string]string  `json:"directiveFields,omitempty"`  // fieldName → GQL directive string (e.g. "@include(if: $RBAC_Plan)")
-	ExtraVars        map[string]string  `json:"extraVars,omitempty"`        // extra GQL var declarations added to non-delete operation signatures
-	ExtraVarValues   map[string]any     `json:"extraVarValues,omitempty"`   // static var values merged into get/create/update method bodies
-	RBACMap          string             `json:"rbacMap,omitempty"`          // package-level RBAC map name passed to mergeVars in method bodies
+	DirectiveFields     map[string]string  `json:"directiveFields,omitempty"`     // fieldName → GQL directive string (e.g. "@include(if: $RBAC_Plan)")
+	ExtraVars           map[string]string  `json:"extraVars,omitempty"`           // extra GQL var declarations added to non-delete operation signatures
+	ExtraVarValues      map[string]any     `json:"extraVarValues,omitempty"`      // static var values merged into get/create/update method bodies
+	RBACMap             string             `json:"rbacMap,omitempty"`             // package-level RBAC map name passed to mergeVars in method bodies
+	NullableInputFields []string           `json:"nullableInputFields,omitempty"` // input fields that should use pointer types despite being scalars
 }
 
 // SchemaTypeName returns the GraphQL schema type name for this resource.
@@ -63,7 +64,8 @@ type OperationConfig struct {
 	ReturnType      string         `json:"returnType,omitempty"`
 	ReturnNullable  *bool          `json:"returnNullable,omitempty"`
 	ResultKey       string         `json:"resultKey,omitempty"`
-	WrappedInput    bool           `json:"wrappedInput,omitempty"` // use $input: TypeName! single var instead of expanding fields
+	WrappedInput    bool           `json:"wrappedInput,omitempty"`  // use $input: TypeName! single var instead of expanding fields
+	InputFields     []string       `json:"inputFields,omitempty"`   // per-op override for which schema input fields appear in the mutation
 }
 
 func loadConfig(path string) (Config, error) {
