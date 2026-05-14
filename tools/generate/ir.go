@@ -148,16 +148,7 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 			} else {
 				b.WriteString("\t" + fieldName + " {\n")
 			}
-			allowed := nestedFieldLists[base]
-			if len(allowed) > 0 {
-				for _, sf := range allowed {
-					b.WriteString("\t\t" + sf + "\n")
-				}
-			} else {
-				for _, sf := range fieldDef.Fields {
-					b.WriteString("\t\t" + sf.Name + "\n")
-				}
-			}
+			writeFragmentSubFields(schema, base, nestedFieldLists[base], nestedFieldLists, 2, &b)
 			b.WriteString("\t}\n")
 		} else {
 			if directive != "" {
@@ -171,6 +162,41 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 	return b.String(), nil
 }
 
+// writeFragmentSubFields recursively writes field selections for a schema type at the
+// given indentation depth. Object sub-fields are expanded using nestedFieldLists.
+func writeFragmentSubFields(schema *ast.Schema, typeName string, allowedFields []string, nestedFieldLists map[string][]string, depth int, b *strings.Builder) {
+	def := schema.Types[typeName]
+	if def == nil {
+		return
+	}
+	indent := strings.Repeat("\t", depth)
+
+	var fieldNames []string
+	if len(allowedFields) > 0 {
+		fieldNames = allowedFields
+	} else {
+		for _, f := range def.Fields {
+			fieldNames = append(fieldNames, f.Name)
+		}
+	}
+
+	for _, fieldName := range fieldNames {
+		f := def.Fields.ForName(fieldName)
+		if f == nil {
+			continue
+		}
+		base := baseTypeName(f.Type)
+		fieldDef := schema.Types[base]
+		if fieldDef != nil && (fieldDef.Kind == ast.Object || fieldDef.Kind == ast.Interface) {
+			fmt.Fprintf(b, "%s%s {\n", indent, fieldName)
+			writeFragmentSubFields(schema, base, nestedFieldLists[base], nestedFieldLists, depth+1, b)
+			fmt.Fprintf(b, "%s}\n", indent)
+		} else {
+			fmt.Fprintf(b, "%s%s\n", indent, fieldName)
+		}
+	}
+}
+
 func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames map[string]string, nestedFieldRenames map[string]map[string]string, nestedFieldLists map[string][]string, scalars map[string]string) (IRStruct, []IRStruct, error) {
 	schemaTypeName := res.SchemaTypeName()
 	def := schema.Types[schemaTypeName]
@@ -178,9 +204,13 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 		return IRStruct{}, nil, fmt.Errorf("type %q not found in schema", schemaTypeName)
 	}
 
-	var mainFields []IRField
-	var nestedTypes []IRStruct
 	seenNested := make(map[string]bool)
+	seenNested[schemaTypeName] = true // prevent the main type from being generated as nested
+
+	// Seed the BFS queue with Object fields of the main type.
+	type queueItem struct{ schemaName, goName string }
+	var queue []queueItem
+	var mainFields []IRField
 
 	for _, fieldName := range res.Fields {
 		f := def.Fields.ForName(fieldName)
@@ -202,11 +232,46 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 			if override, ok := nestedGoNames[base]; ok {
 				goTypeName = override
 			}
-			ns, err := buildNestedStruct(schema, base, goTypeName, nestedFieldRenames[base], nestedFieldLists[base], scalars, nestedGoNames)
-			if err != nil {
-				return IRStruct{}, nil, err
+			queue = append(queue, queueItem{base, goTypeName})
+		}
+	}
+
+	// BFS: generate each nested struct and enqueue its own Object sub-fields.
+	var nestedTypes []IRStruct
+	for len(queue) > 0 {
+		item := queue[0]
+		queue = queue[1:]
+
+		ns, err := buildNestedStruct(schema, item.schemaName, item.goName, nestedFieldRenames[item.schemaName], nestedFieldLists[item.schemaName], scalars, nestedGoNames)
+		if err != nil {
+			return IRStruct{}, nil, err
+		}
+		nestedTypes = append(nestedTypes, ns)
+
+		// Enqueue Object fields of this nested type (respecting its allowed field list).
+		itemDef := schema.Types[item.schemaName]
+		allowedSet := make(map[string]bool)
+		for _, af := range nestedFieldLists[item.schemaName] {
+			allowedSet[af] = true
+		}
+		for _, subf := range itemDef.Fields {
+			if len(allowedSet) > 0 && !allowedSet[subf.Name] {
+				continue
 			}
-			nestedTypes = append(nestedTypes, ns)
+			base := baseTypeName(subf.Type)
+			childDef := schema.Types[base]
+			if childDef == nil || (childDef.Kind != ast.Object && childDef.Kind != ast.Interface) {
+				continue
+			}
+			if seenNested[base] {
+				continue
+			}
+			seenNested[base] = true
+			goTypeName := base
+			if override, ok := nestedGoNames[base]; ok {
+				goTypeName = override
+			}
+			queue = append(queue, queueItem{base, goTypeName})
 		}
 	}
 
@@ -215,6 +280,22 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 		Name:    res.TypeName,
 		Fields:  mainFields,
 	}
+
+	// Generate any extra response types defined in config (e.g. minimal list-item types).
+	// These use GoName as the dedup key since the SchemaName may already be the main type.
+	seenExtraGoNames := make(map[string]bool)
+	for _, ert := range res.ExtraResponseTypes {
+		if seenExtraGoNames[ert.GoName] {
+			continue
+		}
+		seenExtraGoNames[ert.GoName] = true
+		ns, err := buildNestedStruct(schema, ert.SchemaName, ert.GoName, nil, ert.Fields, scalars, nestedGoNames)
+		if err != nil {
+			return IRStruct{}, nil, fmt.Errorf("extra response type %q: %w", ert.GoName, err)
+		}
+		nestedTypes = append(nestedTypes, ns)
+	}
+
 	return mainStruct, nestedTypes, nil
 }
 
@@ -251,6 +332,7 @@ func buildNestedStruct(schema *ast.Schema, schemaTypeName, goTypeName string, fi
 
 func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars map[string]string) ([]IRStruct, []IRBuildVarsFunc, error) {
 	seen := make(map[string]bool)
+	seenNested := make(map[string]bool) // tracks nested InputObject types generated across all ops
 	var inputTypes []IRStruct
 	var buildVarsFuncs []IRBuildVarsFunc
 
@@ -271,6 +353,7 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 			continue
 		}
 		seen[op.InputType] = true
+		seenNested[op.InputType] = true // exclude top-level from nested generation
 
 		def := schema.Types[op.InputType]
 		if def == nil {
@@ -288,6 +371,8 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 			if nullableFields[f.Name] && !strings.HasPrefix(goType, "[]") && !strings.HasPrefix(goType, "*") {
 				goType = "*" + goType
 			}
+			// Apply input type renames to the Go type (strip any list/pointer prefix to check the base name).
+			goType = applyInputTypeRenames(goType, res.InputTypeRenames)
 			fields = append(fields, IRField{
 				Name: goName,
 				Type: goType,
@@ -314,8 +399,87 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 			InputType: goInputName,
 			Vars:      buildVars,
 		})
+
+		// Recursively generate nested InputObject types (with json tags, in dependency order).
+		nested, err := buildNestedInputTypes(schema, op.InputType, seenNested, scalars, res.InputTypeRenames)
+		if err != nil {
+			return nil, nil, fmt.Errorf("nested input types for %s: %w", op.InputType, err)
+		}
+		inputTypes = append(inputTypes, nested...)
 	}
 	return inputTypes, buildVarsFuncs, nil
+}
+
+// applyInputTypeRenames rewrites a Go type string (possibly "[]Foo" or "*Foo") by applying
+// the inputTypeRenames map to the base type name.
+func applyInputTypeRenames(goType string, renames map[string]string) string {
+	if len(renames) == 0 {
+		return goType
+	}
+	prefix := ""
+	base := goType
+	for _, p := range []string{"[]", "*"} {
+		if strings.HasPrefix(base, p) {
+			prefix += p
+			base = base[len(p):]
+		}
+	}
+	if renamed, ok := renames[base]; ok {
+		return prefix + renamed
+	}
+	return goType
+}
+
+// buildNestedInputTypes recursively generates Go structs for nested InputObject types
+// referenced by the fields of the given schema input type. The generated structs include
+// json tags (required for direct serialisation into vars maps).
+func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]bool, scalars map[string]string, renames map[string]string) ([]IRStruct, error) {
+	def := schema.Types[typeName]
+	if def == nil {
+		return nil, fmt.Errorf("type %q not found in schema", typeName)
+	}
+	var result []IRStruct
+	for _, f := range def.Fields {
+		base := baseTypeName(f.Type)
+		childDef := schema.Types[base]
+		if childDef == nil || childDef.Kind != ast.InputObject {
+			continue
+		}
+		if seen[base] {
+			continue
+		}
+		seen[base] = true
+
+		// Recurse to get dependencies first.
+		nested, err := buildNestedInputTypes(schema, base, seen, scalars, renames)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, nested...)
+
+		goTypeName := toPascalCase(base)
+		if renamed, ok := renames[base]; ok {
+			goTypeName = renamed
+		}
+
+		var fields []IRField
+		for _, nf := range childDef.Fields {
+			nfGoType := resolveInputGoType(nf.Type, schema, scalars)
+			nfGoType = applyInputTypeRenames(nfGoType, renames)
+			fields = append(fields, IRField{
+				Name:    toPascalCase(nf.Name),
+				JSONTag: nf.Name,
+				Type:    nfGoType,
+			})
+		}
+		result = append(result, IRStruct{
+			Comment: fmt.Sprintf("// %s is a nested input type.", goTypeName),
+			Name:    goTypeName,
+			Fields:  fields,
+			IsInput: true,
+		})
+	}
+	return result, nil
 }
 
 func buildOperations(schema *ast.Schema, res ResourceConfig, fragConst string, scalars map[string]string) ([]IROperation, error) {
@@ -397,10 +561,10 @@ func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, 
 		return IROperation{}, err
 	}
 
-	// Delete ops return only the id field and don't use the fragment — omit fragConst
-	// so the full fragment body (with directives) isn't included in the delete mutation string.
+	// Delete ops and list ops with inline item fields don't use the fragment — omit fragConst
+	// so AppSync doesn't reject the unused fragment definition.
 	opFragConst := fragConst
-	if kind == "delete" {
+	if kind == "delete" || (kind == "list" && len(op.ListItemFields) > 0) {
 		opFragConst = ""
 	}
 	return IROperation{
@@ -439,9 +603,10 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		idField = "id"
 	}
 
-	// Extra var declarations are added to all ops that use the fragment (not delete).
+	// Extra var declarations are added to ops that use the fragment.
+	// Delete ops and list ops with custom inline fields don't use the fragment, so skip extraVars.
 	extraDecls := ""
-	if kind != "delete" {
+	if kind != "delete" && !(kind == "list" && len(op.ListItemFields) > 0) {
 		extraDecls = extraVarDeclStr(res.ExtraVars)
 	}
 
@@ -505,7 +670,7 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 
 	case "list":
 		if op.Pagination {
-			return buildPaginatedListStr(schema, gqlName, fragRef, op.PaginationVars, extraDecls)
+			return buildPaginatedListStr(schema, gqlName, fragRef, op.PaginationVars, extraDecls, op.ListItemFields)
 		}
 		return buildSimpleListStr(gqlName, fragRef), nil
 
@@ -566,7 +731,7 @@ func buildUpdateStr(schema *ast.Schema, inputTypeName, gqlName, fragRef, idField
 	return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(\n\t\t%s: $%s\n\t\tinput: %s\n\t) {\n\t\t%s\n\t}\n}\n", gqlName, vars, gqlName, idField, idField, input, fragRef), nil
 }
 
-func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginationVars map[string]any, extraDecls string) (string, error) {
+func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginationVars map[string]any, extraDecls string, listItemFields []string) (string, error) {
 	queryDef := schema.Query.Fields.ForName(gqlName)
 	if queryDef == nil {
 		return "", fmt.Errorf("query %q not found in schema", gqlName)
@@ -597,9 +762,13 @@ func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginati
 		allDecls += ", " + extraDecls
 	}
 	constructor := buildConstructorStr(nodes)
+	itemsContent := fragRef
+	if len(listItemFields) > 0 {
+		itemsContent = strings.Join(listItemFields, "\n\t\t\t")
+	}
 	return fmt.Sprintf(
 		"\nquery %s(%s) {\n\t%s(\n\t\tinput: %s\n\t) {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t\tpageInfo {\n\t\t\tnext\n\t\t\ttotal\n\t\t}\n\t}\n}\n",
-		gqlName, allDecls, gqlName, constructor, fragRef,
+		gqlName, allDecls, gqlName, constructor, itemsContent,
 	), nil
 }
 
