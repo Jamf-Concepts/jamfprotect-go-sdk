@@ -155,8 +155,8 @@ type Exception struct {
 	Value          string          `json:"value"`
 	AppSigningInfo *AppSigningInfo `json:"appSigningInfo"`
 	IgnoreActivity string          `json:"ignoreActivity"`
-	Analytic       *AnalyticRef    `json:"analytic"`
 	AnalyticTypes  []string        `json:"analyticTypes"`
+	Analytic       *AnalyticRef    `json:"analytic"`
 	Created        string          `json:"created"`
 	Updated        string          `json:"updated"`
 }
@@ -164,12 +164,12 @@ type Exception struct {
 // EsException contains EsException data.
 type EsException struct {
 	Type              string          `json:"type"`
-	IgnoreListType    string          `json:"ignoreListType"`
-	IgnoreListSubType string          `json:"ignoreListSubType"`
-	EventType         string          `json:"eventType"`
 	Value             string          `json:"value"`
 	AppSigningInfo    *AppSigningInfo `json:"appSigningInfo"`
 	IgnoreActivity    string          `json:"ignoreActivity"`
+	IgnoreListType    string          `json:"ignoreListType"`
+	IgnoreListSubType string          `json:"ignoreListSubType"`
+	EventType         string          `json:"eventType"`
 	Created           string          `json:"created"`
 	Updated           string          `json:"updated"`
 }

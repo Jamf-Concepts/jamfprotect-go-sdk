@@ -548,6 +548,85 @@
       ]
     },
     {
+      "file": "alert.go",
+      "typeName": "Alert",
+      "idField": "uuid",
+      "fields": ["uuid", "created", "updated", "received", "eventTimestamp", "status", "severity", "actions", "tags", "eventType", "plan", "computer", "analytics", "facts"],
+      "nestedTypes": [
+        {"schemaName": "Plan", "goName": "AlertPlan", "fields": ["uuid", "name"]},
+        {"schemaName": "Computer", "goName": "AlertComputer", "fields": ["uuid", "hostName", "modelName", "plan"]},
+        {"schemaName": "Analytic", "goName": "AlertAnalytic", "fields": ["name", "label", "description", "uuid"]},
+        {"schemaName": "AlertFact", "goName": "AlertFact", "fields": ["name", "tags", "human", "severity", "matchReason", "actions"]},
+        {"schemaName": "AlertAction", "goName": "AlertAction", "fields": ["name"]},
+        {"path": "computer.plan", "goName": "AlertComputerPlan", "schemaName": "Plan", "fields": ["id", "name"]}
+      ],
+      "operations": [
+        {
+          "name": "GetAlert",
+          "gqlName": "getAlert",
+          "kind": "get",
+          "endpoint": "/app",
+          "resultKey": "getAlert"
+        },
+        {
+          "name": "ListAlerts",
+          "gqlName": "listAlerts",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listAlerts",
+          "pagination": true,
+          "paginationVars": {
+            "direction": "DESC",
+            "field": "created",
+            "filter": {}
+          }
+        },
+        {
+          "name": "UpdateAlerts",
+          "gqlName": "updateAlerts",
+          "kind": "mutation_list",
+          "endpoint": "/app",
+          "resultKey": "updateAlerts",
+          "inputType": "AlertUpdateInput"
+        }
+      ]
+    },
+    {
+      "file": "alert_status_counts.go",
+      "typeName": "AlertStatusCounts",
+      "gqlTypeName": "AlertStatusCountResponse",
+      "fields": ["New", "InProgress", "Resolved", "AutoResolved"],
+      "operations": [
+        {
+          "name": "GetAlertStatusCounts",
+          "gqlName": "getAlertStatusCounts",
+          "kind": "singleton_get",
+          "endpoint": "/app",
+          "resultKey": "getAlertStatusCounts"
+        }
+      ]
+    },
+    {
+      "file": "identity_provider.go",
+      "typeName": "Connection",
+      "fields": ["id", "name", "requireKnownUsers", "button", "created", "updated", "strategy", "groupsSupport", "source"],
+      "operations": [
+        {
+          "name": "ListConnections",
+          "gqlName": "listConnections",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listConnections",
+          "pagination": true,
+          "paginationVars": {
+            "direction": "ASC",
+            "field": "name",
+            "pageSize": 100
+          }
+        }
+      ]
+    },
+    {
       "file": "exception_set.go",
       "typeName": "ExceptionSet",
       "idField": "uuid",

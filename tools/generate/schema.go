@@ -50,9 +50,12 @@ var goInitialisms = map[string]bool{
 
 // goCustomCasing handles plural/mixed initialisms that aren't pure uppercase (e.g. "ids" → "IDs").
 var goCustomCasing = map[string]string{
-	"ids":  "IDs",
-	"pppc": "PPPC",
-	"csr":  "CSR",
+	"ids":   "IDs",
+	"uuids": "UUIDs",
+	"ips":   "IPs",
+	"pppc":  "PPPC",
+	"csr":   "CSR",
+	"ngtp":  "NGTP",
 }
 
 // toPascalCase converts a camelCase identifier to Go PascalCase,

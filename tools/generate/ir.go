@@ -72,27 +72,54 @@ type BuildVar struct {
 }
 
 func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, error) {
+	// Schema-name-keyed maps (the default; first NestedTypeConfig wins per schema name).
 	nestedGoNames := make(map[string]string)
 	nestedFieldRenames := make(map[string]map[string]string)
 	nestedFieldLists := make(map[string][]string) // schemaName → allowed fields (nil = all)
+	nestedDirectives := make(map[string]map[string]string)
+	nestedNullableFields := make(map[string]map[string]bool)
+	// Path-keyed maps for context-specific overrides (e.g. "computer.plan" → AlertComputerPlan).
+	pathOverrides := make(map[string]NestedTypeConfig)
+
 	for _, nt := range res.NestedTypes {
-		nestedGoNames[nt.SchemaName] = nt.GoName
+		if nt.Path != "" {
+			pathOverrides[nt.Path] = nt
+			continue
+		}
+		if _, exists := nestedGoNames[nt.SchemaName]; !exists {
+			nestedGoNames[nt.SchemaName] = nt.GoName
+		}
 		if len(nt.FieldRenames) > 0 {
 			nestedFieldRenames[nt.SchemaName] = nt.FieldRenames
 		}
 		if len(nt.Fields) > 0 {
 			nestedFieldLists[nt.SchemaName] = nt.Fields
 		}
+		if len(nt.DirectiveFields) > 0 {
+			nestedDirectives[nt.SchemaName] = nt.DirectiveFields
+		}
+		if len(nt.NullableFields) > 0 {
+			m := make(map[string]bool)
+			for _, f := range nt.NullableFields {
+				m[f] = true
+			}
+			nestedNullableFields[nt.SchemaName] = m
+		}
+	}
+
+	nullableResponseFields := make(map[string]bool)
+	for _, f := range res.NullableResponseFields {
+		nullableResponseFields[f] = true
 	}
 
 	fragConst := lcFirst(res.TypeName) + "Fields"
 
-	fragment, err := buildFragment(schema, res, nestedFieldLists)
+	fragment, err := buildFragment(schema, res, nestedFieldLists, nestedDirectives, pathOverrides)
 	if err != nil {
 		return IRResource{}, fmt.Errorf("fragment: %w", err)
 	}
 
-	mainType, nestedTypes, err := buildResponseTypes(schema, res, nestedGoNames, nestedFieldRenames, nestedFieldLists, cfg.Scalars)
+	mainType, nestedTypes, err := buildResponseTypes(schema, res, nestedGoNames, nestedFieldRenames, nestedFieldLists, nestedNullableFields, nullableResponseFields, pathOverrides, cfg.Scalars)
 	if err != nil {
 		return IRResource{}, fmt.Errorf("response types: %w", err)
 	}
@@ -129,7 +156,7 @@ func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, er
 	}, nil
 }
 
-func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[string][]string) (string, error) {
+func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[string][]string, nestedDirectives map[string]map[string]string, pathOverrides map[string]NestedTypeConfig) (string, error) {
 	schemaTypeName := res.SchemaTypeName()
 	def := schema.Types[schemaTypeName]
 	if def == nil {
@@ -151,7 +178,18 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 			} else {
 				b.WriteString("\t" + fieldName + " {\n")
 			}
-			writeFragmentSubFields(schema, base, nestedFieldLists[base], nestedFieldLists, 2, &b)
+			// Resolve sub-fields for this nested type: check path override first, then schema-name fallback.
+			subFields := nestedFieldLists[base]
+			subDirectives := nestedDirectives[base]
+			if override, ok := pathOverrides[fieldName]; ok {
+				if len(override.Fields) > 0 {
+					subFields = override.Fields
+				}
+				if len(override.DirectiveFields) > 0 {
+					subDirectives = override.DirectiveFields
+				}
+			}
+			writeFragmentSubFields(schema, base, subFields, subDirectives, nestedFieldLists, nestedDirectives, pathOverrides, fieldName, 2, &b)
 			b.WriteString("\t}\n")
 		} else {
 			if directive != "" {
@@ -167,7 +205,8 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 
 // writeFragmentSubFields recursively writes field selections for a schema type at the
 // given indentation depth. Object sub-fields are expanded using nestedFieldLists.
-func writeFragmentSubFields(schema *ast.Schema, typeName string, allowedFields []string, nestedFieldLists map[string][]string, depth int, b *strings.Builder) {
+// currentPath tracks the dot-path from the main type root, enabling path-based overrides.
+func writeFragmentSubFields(schema *ast.Schema, typeName string, allowedFields []string, directives map[string]string, nestedFieldLists map[string][]string, nestedDirectives map[string]map[string]string, pathOverrides map[string]NestedTypeConfig, currentPath string, depth int, b *strings.Builder) {
 	def := schema.Types[typeName]
 	if def == nil {
 		return
@@ -190,17 +229,37 @@ func writeFragmentSubFields(schema *ast.Schema, typeName string, allowedFields [
 		}
 		base := baseTypeName(f.Type)
 		fieldDef := schema.Types[base]
+		directive := directives[fieldName]
+		childPath := currentPath + "." + fieldName
 		if fieldDef != nil && (fieldDef.Kind == ast.Object || fieldDef.Kind == ast.Interface) {
-			fmt.Fprintf(b, "%s%s {\n", indent, fieldName)
-			writeFragmentSubFields(schema, base, nestedFieldLists[base], nestedFieldLists, depth+1, b)
+			if directive != "" {
+				fmt.Fprintf(b, "%s%s %s {\n", indent, fieldName, directive)
+			} else {
+				fmt.Fprintf(b, "%s%s {\n", indent, fieldName)
+			}
+			subFields := nestedFieldLists[base]
+			subDirectives := nestedDirectives[base]
+			if override, ok := pathOverrides[childPath]; ok {
+				if len(override.Fields) > 0 {
+					subFields = override.Fields
+				}
+				if len(override.DirectiveFields) > 0 {
+					subDirectives = override.DirectiveFields
+				}
+			}
+			writeFragmentSubFields(schema, base, subFields, subDirectives, nestedFieldLists, nestedDirectives, pathOverrides, childPath, depth+1, b)
 			fmt.Fprintf(b, "%s}\n", indent)
 		} else {
-			fmt.Fprintf(b, "%s%s\n", indent, fieldName)
+			if directive != "" {
+				fmt.Fprintf(b, "%s%s %s\n", indent, fieldName, directive)
+			} else {
+				fmt.Fprintf(b, "%s%s\n", indent, fieldName)
+			}
 		}
 	}
 }
 
-func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames map[string]string, nestedFieldRenames map[string]map[string]string, nestedFieldLists map[string][]string, scalars map[string]string) (IRStruct, []IRStruct, error) {
+func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames map[string]string, nestedFieldRenames map[string]map[string]string, nestedFieldLists map[string][]string, nestedNullableFields map[string]map[string]bool, nullableResponseFields map[string]bool, pathOverrides map[string]NestedTypeConfig, scalars map[string]string) (IRStruct, []IRStruct, error) {
 	schemaTypeName := res.SchemaTypeName()
 	def := schema.Types[schemaTypeName]
 	if def == nil {
@@ -210,8 +269,16 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 	seenNested := make(map[string]bool)
 	seenNested[schemaTypeName] = true // prevent the main type from being generated as nested
 
+	seenPaths := make(map[string]bool)
+
 	// Seed the BFS queue with Object fields of the main type.
-	type queueItem struct{ schemaName, goName string }
+	// pathPrefix is the dot-path from the root used to look up path-overrides; it's
+	// always carried forward even when there's no override.
+	type queueItem struct {
+		schemaName, goName string
+		pathPrefix         string
+		usingPathOverride  bool // true when this queue item was enqueued because of a path override
+	}
 	var queue []queueItem
 	var mainFields []IRField
 
@@ -220,22 +287,38 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 		if f == nil {
 			return IRStruct{}, nil, fmt.Errorf("field %q not on type %s", fieldName, schemaTypeName)
 		}
-		goType := resolveGoType(f.Type, schema, scalars, nestedGoNames)
+		base := baseTypeName(f.Type)
+		// Check for path-based override first.
+		var goType string
+		if override, ok := pathOverrides[fieldName]; ok {
+			goType = wrapTypeForPathOverride(f.Type, override.GoName)
+		} else {
+			goType = resolveGoType(f.Type, schema, scalars, nestedGoNames)
+		}
+		if nullableResponseFields[fieldName] {
+			goType = ensurePointer(goType)
+		}
 		mainFields = append(mainFields, IRField{
 			Name:    toPascalCase(fieldName),
 			JSONTag: fieldName,
 			Type:    goType,
 		})
 
-		base := baseTypeName(f.Type)
 		fieldDef := schema.Types[base]
-		if fieldDef != nil && (fieldDef.Kind == ast.Object || fieldDef.Kind == ast.Interface) && !seenNested[base] {
-			seenNested[base] = true
-			goTypeName := base
-			if override, ok := nestedGoNames[base]; ok {
-				goTypeName = override
+		if fieldDef != nil && (fieldDef.Kind == ast.Object || fieldDef.Kind == ast.Interface) {
+			if override, ok := pathOverrides[fieldName]; ok {
+				if !seenPaths[fieldName] {
+					seenPaths[fieldName] = true
+					queue = append(queue, queueItem{base, override.GoName, fieldName, true})
+				}
+			} else if !seenNested[base] {
+				seenNested[base] = true
+				goTypeName := base
+				if o, ok := nestedGoNames[base]; ok {
+					goTypeName = o
+				}
+				queue = append(queue, queueItem{base, goTypeName, fieldName, false})
 			}
-			queue = append(queue, queueItem{base, goTypeName})
 		}
 	}
 
@@ -245,7 +328,26 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 		item := queue[0]
 		queue = queue[1:]
 
-		ns, err := buildNestedStruct(schema, item.schemaName, item.goName, nestedFieldRenames[item.schemaName], nestedFieldLists[item.schemaName], scalars, nestedGoNames)
+		var fieldsList []string
+		var renames map[string]string
+		var nullable map[string]bool
+		if item.usingPathOverride {
+			if override, ok := pathOverrides[item.pathPrefix]; ok {
+				fieldsList = override.Fields
+				renames = override.FieldRenames
+				if len(override.NullableFields) > 0 {
+					nullable = make(map[string]bool)
+					for _, nf := range override.NullableFields {
+						nullable[nf] = true
+					}
+				}
+			}
+		} else {
+			fieldsList = nestedFieldLists[item.schemaName]
+			renames = nestedFieldRenames[item.schemaName]
+			nullable = nestedNullableFields[item.schemaName]
+		}
+		ns, err := buildNestedStruct(schema, item.schemaName, item.goName, renames, fieldsList, nullable, scalars, nestedGoNames, pathOverrides, item.pathPrefix)
 		if err != nil {
 			return IRStruct{}, nil, err
 		}
@@ -254,16 +356,34 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 		// Enqueue Object fields of this nested type (respecting its allowed field list).
 		itemDef := schema.Types[item.schemaName]
 		allowedSet := make(map[string]bool)
-		for _, af := range nestedFieldLists[item.schemaName] {
+		for _, af := range fieldsList {
 			allowedSet[af] = true
 		}
-		for _, subf := range itemDef.Fields {
+		fieldOrder := fieldsList
+		if len(fieldOrder) == 0 {
+			for _, f := range itemDef.Fields {
+				fieldOrder = append(fieldOrder, f.Name)
+			}
+		}
+		for _, fName := range fieldOrder {
+			subf := itemDef.Fields.ForName(fName)
+			if subf == nil {
+				continue
+			}
 			if len(allowedSet) > 0 && !allowedSet[subf.Name] {
 				continue
 			}
 			base := baseTypeName(subf.Type)
 			childDef := schema.Types[base]
 			if childDef == nil || (childDef.Kind != ast.Object && childDef.Kind != ast.Interface) {
+				continue
+			}
+			childPath := item.pathPrefix + "." + subf.Name
+			if override, ok := pathOverrides[childPath]; ok {
+				if !seenPaths[childPath] {
+					seenPaths[childPath] = true
+					queue = append(queue, queueItem{base, override.GoName, childPath, true})
+				}
 				continue
 			}
 			if seenNested[base] {
@@ -274,7 +394,7 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 			if override, ok := nestedGoNames[base]; ok {
 				goTypeName = override
 			}
-			queue = append(queue, queueItem{base, goTypeName})
+			queue = append(queue, queueItem{base, goTypeName, childPath, false})
 		}
 	}
 
@@ -292,7 +412,7 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 			continue
 		}
 		seenExtraGoNames[ert.GoName] = true
-		ns, err := buildNestedStruct(schema, ert.SchemaName, ert.GoName, nil, ert.Fields, scalars, nestedGoNames)
+		ns, err := buildNestedStruct(schema, ert.SchemaName, ert.GoName, nil, ert.Fields, nil, scalars, nestedGoNames, pathOverrides, "")
 		if err != nil {
 			return IRStruct{}, nil, fmt.Errorf("extra response type %q: %w", ert.GoName, err)
 		}
@@ -302,7 +422,28 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 	return mainStruct, nestedTypes, nil
 }
 
-func buildNestedStruct(schema *ast.Schema, schemaTypeName, goTypeName string, fieldRenames map[string]string, allowedFields []string, scalars map[string]string, nestedOverrides map[string]string) (IRStruct, error) {
+// ensurePointer wraps a Go type in a pointer, unless it already is one or is a slice.
+// Slices become *[]T (pointer to slice).
+func ensurePointer(goType string) string {
+	if strings.HasPrefix(goType, "*") {
+		return goType
+	}
+	return "*" + goType
+}
+
+// wrapTypeForPathOverride takes a schema field type and an override Go type name and produces
+// the Go type expression preserving list/nullability wrapping from the schema field.
+func wrapTypeForPathOverride(t *ast.Type, overrideGoName string) string {
+	if t.Elem != nil {
+		return "[]" + overrideGoName
+	}
+	if !t.NonNull {
+		return "*" + overrideGoName
+	}
+	return overrideGoName
+}
+
+func buildNestedStruct(schema *ast.Schema, schemaTypeName, goTypeName string, fieldRenames map[string]string, allowedFields []string, nullableFields map[string]bool, scalars map[string]string, nestedOverrides map[string]string, pathOverrides map[string]NestedTypeConfig, parentPath string) (IRStruct, error) {
 	def := schema.Types[schemaTypeName]
 	if def == nil {
 		return IRStruct{}, fmt.Errorf("type %q not found in schema", schemaTypeName)
@@ -311,19 +452,45 @@ func buildNestedStruct(schema *ast.Schema, schemaTypeName, goTypeName string, fi
 	for _, f := range allowedFields {
 		allowed[f] = true
 	}
+	// Iterate in allowedFields order when provided, otherwise schema order.
+	var iterNames []string
+	if len(allowedFields) > 0 {
+		iterNames = allowedFields
+	} else {
+		for _, f := range def.Fields {
+			iterNames = append(iterNames, f.Name)
+		}
+	}
 	var fields []IRField
-	for _, f := range def.Fields {
-		if len(allowed) > 0 && !allowed[f.Name] {
+	for _, fName := range iterNames {
+		f := def.Fields.ForName(fName)
+		if f == nil {
 			continue
 		}
 		goName := toPascalCase(f.Name)
 		if renamed, ok := fieldRenames[f.Name]; ok {
 			goName = renamed
 		}
+		var fGoType string
+		childPath := ""
+		if parentPath != "" {
+			childPath = parentPath + "." + f.Name
+		}
+		if childPath != "" {
+			if override, ok := pathOverrides[childPath]; ok {
+				fGoType = wrapTypeForPathOverride(f.Type, override.GoName)
+			}
+		}
+		if fGoType == "" {
+			fGoType = resolveGoType(f.Type, schema, scalars, nestedOverrides)
+		}
+		if nullableFields[f.Name] {
+			fGoType = ensurePointer(fGoType)
+		}
 		fields = append(fields, IRField{
 			Name:    goName,
 			JSONTag: f.Name,
-			Type:    resolveGoType(f.Type, schema, scalars, nestedOverrides),
+			Type:    fGoType,
 		})
 	}
 	return IRStruct{
@@ -591,7 +758,8 @@ func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, 
 		returnType = res.TypeName
 	}
 
-	isMutation := kind == "create" || kind == "update" || kind == "delete"
+	isMutation := kind == "create" || kind == "update" || kind == "delete" ||
+		kind == "mutation_list" || kind == "singleton_update" || kind == "update_inline"
 	suffix := "Query"
 	if isMutation {
 		suffix = "Mutation"
@@ -607,15 +775,27 @@ func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, 
 	if idField == "" {
 		idField = "id"
 	}
-	sig, doc, body, err := buildMethodParts(op, kind, endpoint, returnType, returnNullable, resultKey, constName, idField, res.RBACMap, res.ExtraVarValues)
+	// Per-op extra var values override / extend resource-level extra var values.
+	combinedExtraVars := make(map[string]any)
+	for k, v := range res.ExtraVarValues {
+		combinedExtraVars[k] = v
+	}
+	for k, v := range op.ExtraVarValues {
+		combinedExtraVars[k] = v
+	}
+	sig, doc, body, err := buildMethodParts(op, kind, endpoint, returnType, returnNullable, resultKey, constName, idField, res.RBACMap, combinedExtraVars)
 	if err != nil {
 		return IROperation{}, err
 	}
 
-	// Delete ops and list ops with inline item fields don't use the fragment — omit fragConst
-	// so AppSync doesn't reject the unused fragment definition.
+	// Delete ops, list ops with inline item fields, ops with inline fields, and ops with noFragment
+	// don't use the fragment — omit fragConst so AppSync doesn't reject the unused fragment definition.
 	opFragConst := fragConst
-	if kind == "delete" || (kind == "list" && len(op.ListItemFields) > 0) {
+	if kind == "delete" || (kind == "list" && len(op.ListItemFields) > 0) || len(op.InlineFields) > 0 || op.NoFragment {
+		opFragConst = ""
+	}
+	// list_simple doesn't necessarily need the fragment; honor NoFragment if set.
+	if kind == "list_simple" && op.NoFragment {
 		opFragConst = ""
 	}
 	return IROperation{
@@ -659,6 +839,12 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 	extraDecls := ""
 	if kind != "delete" && !(kind == "list" && len(op.ListItemFields) > 0) {
 		extraDecls = extraVarDeclStr(res.ExtraVars)
+	}
+
+	// Build a "body" — what goes inside the response selection. Defaults to fragment ref.
+	bodySelection := fragRef
+	if len(op.InlineFields) > 0 {
+		bodySelection = strings.Join(op.InlineFields, "\n\t\t")
 	}
 
 	switch kind {
@@ -717,7 +903,17 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		if opResultKey != gqlName {
 			fieldRef = opResultKey + ": " + gqlName
 		}
-		return fmt.Sprintf("\nquery %s {\n\t%s {\n\t\t%s\n\t}\n}\n", gqlName, fieldRef, fragRef), nil
+		varDecls := ""
+		if extraDecls != "" {
+			varDecls = "(" + extraDecls + ")"
+		}
+		// Wrap nested-result paths around the bodySelection.
+		body := wrapResultPath(op.ResultPath, gqlName, bodySelection)
+		// If ResultPath wasn't given, default to single-level wrap with fieldRef.
+		if op.ResultPath == "" {
+			body = fmt.Sprintf("%s {\n\t\t%s\n\t}", fieldRef, bodySelection)
+		}
+		return fmt.Sprintf("\nquery %s%s {\n\t%s\n}\n", gqlName, varDecls, body), nil
 
 	case "list":
 		if op.Pagination {
@@ -725,9 +921,134 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		}
 		return buildSimpleListStr(gqlName, fragRef), nil
 
+	case "list_simple":
+		// Top-level list returning [T] directly (no items/pageInfo wrapper, no pagination).
+		// e.g. listInsights returns [Insight] directly.
+		return fmt.Sprintf("\nquery %s {\n\t%s {\n\t\t%s\n\t}\n}\n", gqlName, gqlName, bodySelection), nil
+
+	case "mutation_list":
+		// Mutation returning {items: [T]}. Build like create, but wrap in items.
+		if op.InputType == "" && len(op.InlineArgs) == 0 {
+			return "", fmt.Errorf("mutation_list op %q requires inputType or inlineArgs", op.Name)
+		}
+		if len(op.InlineArgs) > 0 {
+			return buildInlineArgsMutationStr(op, gqlName, bodySelection, true, extraDecls, idField)
+		}
+		opInputFields := res.InputFields
+		if len(op.InputFields) > 0 {
+			opInputFields = op.InputFields
+		}
+		return buildMutationListStr(schema, op.InputType, gqlName, bodySelection, opInputFields, extraDecls)
+
+	case "singleton_update":
+		// Mutation taking primitive args, wrapped in input: {field: $field}.
+		if len(op.InlineArgs) == 0 {
+			return "", fmt.Errorf("singleton_update op %q requires inlineArgs", op.Name)
+		}
+		return buildInlineArgsMutationStr(op, gqlName, bodySelection, false, extraDecls, idField)
+
+	case "update_inline":
+		// Update mutation taking primitive args (idField + others), wrapped in input.
+		if len(op.InlineArgs) == 0 {
+			return "", fmt.Errorf("update_inline op %q requires inlineArgs", op.Name)
+		}
+		return buildInlineArgsMutationStr(op, gqlName, bodySelection, false, extraDecls, idField)
+
+	case "date_paginated":
+		// Date-range cursor-paginated list. No fragment override; uses bodySelection (which defaults to fragRef).
+		return buildDatePaginatedStr(gqlName, bodySelection, extraDecls)
+
 	default:
 		return "", fmt.Errorf("unsupported kind %q", kind)
 	}
+}
+
+// wrapResultPath builds nested object selections for a dot-path like "getAppInitializationData.betaAcceptanceStatus".
+// The innermost level wraps bodySelection. If path is empty, returns body wrapping with gqlName.
+func wrapResultPath(path, gqlName, body string) string {
+	if path == "" {
+		return fmt.Sprintf("%s {\n\t\t%s\n\t}", gqlName, body)
+	}
+	parts := strings.Split(path, ".")
+	// Walk from innermost outward, wrapping each level.
+	cur := body
+	for i := len(parts) - 1; i >= 0; i-- {
+		indent := strings.Repeat("\t", i+1)
+		closeIndent := strings.Repeat("\t", i+1)
+		_ = closeIndent
+		cur = fmt.Sprintf("%s {\n%s\t%s\n%s}", parts[i], indent, cur, indent)
+	}
+	return cur
+}
+
+// buildMutationListStr builds a mutation that returns {items: [T]}.
+func buildMutationListStr(schema *ast.Schema, inputTypeName, gqlName, bodySelection string, allowedFields []string, extraDecls string) (string, error) {
+	def := schema.Types[inputTypeName]
+	if def == nil {
+		return "", fmt.Errorf("input type %q not found", inputTypeName)
+	}
+	allowed := make(map[string]bool, len(allowedFields))
+	for _, f := range allowedFields {
+		allowed[f] = true
+	}
+	varDecls := make([]string, 0, len(def.Fields))
+	inputParts := make([]string, 0, len(def.Fields))
+	for _, f := range def.Fields {
+		if len(allowed) > 0 && !allowed[f.Name] {
+			continue
+		}
+		varDecls = append(varDecls, "$"+f.Name+": "+f.Type.String())
+		inputParts = append(inputParts, f.Name+": $"+f.Name)
+	}
+	vars := strings.Join(varDecls, ", ")
+	if extraDecls != "" {
+		vars += ", " + extraDecls
+	}
+	input := "{" + strings.Join(inputParts, ", ") + "}"
+	return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(input: %s) {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t}\n}\n", gqlName, vars, gqlName, input, bodySelection), nil
+}
+
+// buildInlineArgsMutationStr builds a mutation from primitive inline args.
+// If wrapInItems is true, wraps the response in {items: [T]}.
+func buildInlineArgsMutationStr(op OperationConfig, gqlName, bodySelection string, wrapInItems bool, extraDecls, idField string) (string, error) {
+	var varDecls []string
+	var idArgPart string
+	var inputParts []string
+	for _, a := range op.InlineArgs {
+		varDecls = append(varDecls, "$"+a.GQLVar+": "+a.GQLType)
+		if a.IsID {
+			idArgPart = a.GQLVar + ": $" + a.GQLVar
+		} else {
+			inputParts = append(inputParts, a.GQLVar+": $"+a.GQLVar)
+		}
+	}
+	vars := strings.Join(varDecls, ", ")
+	if extraDecls != "" {
+		vars += ", " + extraDecls
+	}
+	var argPart string
+	if idArgPart != "" {
+		if len(inputParts) > 0 {
+			argPart = idArgPart + ", input: {" + strings.Join(inputParts, ", ") + "}"
+		} else {
+			argPart = idArgPart
+		}
+	} else {
+		argPart = "input: {" + strings.Join(inputParts, ", ") + "}"
+	}
+	if wrapInItems {
+		return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(%s) {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t}\n}\n", gqlName, vars, gqlName, argPart, bodySelection), nil
+	}
+	return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(%s) {\n\t\t%s\n\t}\n}\n", gqlName, vars, gqlName, argPart, bodySelection), nil
+}
+
+// buildDatePaginatedStr builds the query for a date-range paginated op.
+func buildDatePaginatedStr(gqlName, bodySelection, extraDecls string) (string, error) {
+	varDecls := "$next: String, $pageSize: Int, $order: AuditLogsOrderInput, $condition: AuditLogsDateConditionInput"
+	if extraDecls != "" {
+		varDecls += ", " + extraDecls
+	}
+	return fmt.Sprintf("\nquery %s(\n\t%s\n) {\n\t%s(\n\t\tinput: {next: $next, pageSize: $pageSize, order: $order, condition: $condition}\n\t) {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t\tpageInfo {\n\t\t\tnext\n\t\t\ttotal\n\t\t}\n\t}\n}\n", gqlName, varDecls, gqlName, bodySelection), nil
 }
 
 func buildCreateStr(schema *ast.Schema, inputTypeName, gqlName, fragRef string, allowedFields []string, extraDecls string) (string, error) {
@@ -862,7 +1183,7 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 	case "singleton_get":
 		sig = fmt.Sprintf("(ctx context.Context) (%s, error)", returnType)
 		doc = fmt.Sprintf("// %s retrieves the %s.", op.Name, lcFirst(returnType))
-		body = buildSingletonGetBody(op.Name, returnType, resultKey, endpoint, constName)
+		body = buildSingletonGetBody(op.Name, returnType, resultKey, endpoint, constName, op.ResultPath, op.ResultPathTypes, extraVarValues, rbacMap)
 
 	case "list":
 		sig = fmt.Sprintf("(ctx context.Context) ([]%s, error)", returnType)
@@ -873,10 +1194,62 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 			body = buildListSimpleBody(op.Name, returnType, resultKey, endpoint, constName)
 		}
 
+	case "list_simple":
+		sig = fmt.Sprintf("(ctx context.Context) ([]%s, error)", returnType)
+		doc = fmt.Sprintf("// %s retrieves all %ss.", op.Name, lcFirst(returnType))
+		body = buildListSimpleTopLevelBody(op.Name, returnType, resultKey, endpoint, constName)
+
+	case "mutation_list":
+		goInputName := op.InputType
+		if op.InputTypeGoName != "" {
+			goInputName = op.InputTypeGoName
+		}
+		if len(op.InlineArgs) > 0 {
+			sigStr, _ := inlineArgsSignature(op.InlineArgs)
+			sig = fmt.Sprintf("(ctx context.Context%s) ([]%s, error)", sigStr, returnType)
+		} else {
+			sig = fmt.Sprintf("(ctx context.Context, input %s) ([]%s, error)", goInputName, returnType)
+		}
+		doc = fmt.Sprintf("// %s bulk-updates %ss.", op.Name, lcFirst(returnType))
+		body = buildMutationListBody(op, returnType, resultKey, endpoint, constName, rbacMap, extraVarValues)
+
+	case "singleton_update":
+		sigStr, _ := inlineArgsSignature(op.InlineArgs)
+		sig = fmt.Sprintf("(ctx context.Context%s) (%s, error)", sigStr, returnType)
+		doc = fmt.Sprintf("// %s updates the %s.", op.Name, lcFirst(returnType))
+		body = buildSingletonUpdateBody(op, returnType, resultKey, endpoint, constName, rbacMap, extraVarValues)
+
+	case "update_inline":
+		sigStr, _ := inlineArgsSignature(op.InlineArgs)
+		sig = fmt.Sprintf("(ctx context.Context%s) (%s, error)", sigStr, returnType)
+		doc = fmt.Sprintf("// %s updates a %s.", op.Name, lcFirst(returnType))
+		body = buildUpdateInlineBody(op, returnType, resultKey, endpoint, constName, rbacMap, extraVarValues)
+
+	case "date_paginated":
+		argName := op.DateRangeArg
+		if argName == "" {
+			argName = "dateRange"
+		}
+		dateType := returnType + "DateRange"
+		sig = fmt.Sprintf("(ctx context.Context, %s *%s) ([]%s, error)", argName, dateType, returnType)
+		doc = fmt.Sprintf("// %s retrieves %ss within a date range.", op.Name, lcFirst(returnType))
+		body = buildDatePaginatedBody(op.Name, returnType, resultKey, endpoint, constName, argName, dateType)
+
 	default:
 		err = fmt.Errorf("unsupported kind %q for method body", kind)
 	}
 	return
+}
+
+// inlineArgsSignature builds the Go signature args portion for inline args (e.g. ", configFreeze bool").
+func inlineArgsSignature(args []InlineArg) (string, []string) {
+	var parts []string
+	var names []string
+	for _, a := range args {
+		parts = append(parts, ", "+a.Name+" "+a.GoType)
+		names = append(names, a.Name)
+	}
+	return strings.Join(parts, ""), names
 }
 
 // buildMapLit emits a Go map[string]any{...} literal from a map, or "" when the map is empty.
@@ -912,11 +1285,153 @@ func mergeVarsExpr(baseLit, extraVarLit, rbacMap string) string {
 	return "vars := mergeVars(" + strings.Join(args, ", ") + ")"
 }
 
-func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constName string) string {
+func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constName, resultPath string, resultPathTypes []string, extraVarValues map[string]any, rbacMap string) string {
+	// Build vars expression. For singleton_get with extraVars/rbacMap, vars are needed.
+	varsArg := "nil"
+	varAssignPrefix := ""
+	if len(extraVarValues) > 0 || rbacMap != "" {
+		var baseLit string
+		if len(extraVarValues) > 0 {
+			baseLit = buildMapLit(extraVarValues)
+		} else {
+			baseLit = "map[string]any{}"
+		}
+		if rbacMap != "" {
+			varAssignPrefix = "vars := mergeVars(" + baseLit + ", " + rbacMap + ")\n\t"
+		} else {
+			varAssignPrefix = "vars := " + baseLit + "\n\t"
+		}
+		varsArg = "vars"
+	}
+
+	if resultPath == "" {
+		tag := bt + `json:"` + resultKey + `"` + bt
+		return fmt.Sprintf(
+			"%svar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, %s, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
+			varAssignPrefix, methodName, returnType, tag, endpoint, constName, varsArg, returnType, methodName, methodName)
+	}
+
+	// Nested-result extraction: result.Level1.Level2.<value>
+	parts := strings.Split(resultPath, ".")
+	// Build nested struct + accessor path.
+	// Outer struct's field is parts[0]; type wraps inner struct; final type is returnType.
+	var b strings.Builder
+	b.WriteString(varAssignPrefix)
+	b.WriteString("var result struct {\n")
+	// Build nested: each level a struct field with json tag.
+	indent := "\t\t"
+	closers := []string{}
+	for i, part := range parts {
+		fieldGoName := toPascalCase(part)
+		if i == len(parts)-1 {
+			fmt.Fprintf(&b, "%s%s %s %sjson:\"%s\"%s\n", indent, fieldGoName, returnType, bt, part, bt)
+		} else {
+			// Allow optional intermediate type override; default is anonymous struct.
+			fmt.Fprintf(&b, "%s%s struct {\n", indent, fieldGoName)
+			closers = append(closers, indent+"} "+bt+"json:\""+part+"\""+bt)
+			indent += "\t"
+		}
+	}
+	for i := len(closers) - 1; i >= 0; i-- {
+		b.WriteString(closers[i] + "\n")
+	}
+	b.WriteString("\t}\n")
+	fmt.Fprintf(&b, "\tif err := c.transport.DoGraphQL(ctx, %q, %s, %s, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n", endpoint, constName, varsArg, returnType, methodName)
+	// Build accessor: result.Part1.Part2...
+	accessor := "result"
+	for _, part := range parts {
+		accessor += "." + toPascalCase(part)
+	}
+	fmt.Fprintf(&b, "\treturn %s, nil", accessor)
+	return b.String()
+}
+
+func buildListSimpleTopLevelBody(methodName, returnType, resultKey, endpoint, constName string) string {
+	// For queries like `listInsights: [Insight]` returning [T] directly (not wrapped in items).
 	tag := bt + `json:"` + resultKey + `"` + bt
 	return fmt.Sprintf(
-		"var result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, nil, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
-		methodName, returnType, tag, endpoint, constName, returnType, methodName, methodName)
+		"var result struct {\n\t\t%s []%s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, nil, &result); err != nil {\n\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
+		toPascalCase(resultKey), returnType, tag, endpoint, constName, methodName, toPascalCase(resultKey))
+}
+
+func buildMutationListBody(op OperationConfig, returnType, resultKey, endpoint, constName, rbacMap string, extraVarValues map[string]any) string {
+	outerTag := bt + `json:"` + resultKey + `"` + bt
+	innerTag := bt + `json:"items"` + bt
+
+	var varAssign string
+	if len(op.InlineArgs) > 0 {
+		// Build vars from inline args.
+		var parts []string
+		for _, a := range op.InlineArgs {
+			parts = append(parts, fmt.Sprintf("%q: %s", a.GQLVar, a.Name))
+		}
+		baseLit := "map[string]any{" + strings.Join(parts, ", ") + "}"
+		varAssign = mergeVarsExpr(baseLit, buildMapLit(extraVarValues), rbacMap)
+	} else {
+		goInputName := op.InputType
+		if op.InputTypeGoName != "" {
+			goInputName = op.InputTypeGoName
+		}
+		buildFn := "build" + strings.TrimSuffix(goInputName, "Input") + "Variables"
+		baseLit := buildFn + "(input)"
+		varAssign = mergeVarsExpr(baseLit, buildMapLit(extraVarValues), rbacMap)
+	}
+
+	return fmt.Sprintf(
+		"%s\n\tvar result struct {\n\t\t%s struct {\n\t\t\tItems []%s %s\n\t\t} %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s.Items, nil",
+		varAssign, toPascalCase(resultKey), returnType, innerTag, outerTag, endpoint, constName, op.Name, toPascalCase(resultKey))
+}
+
+func buildSingletonUpdateBody(op OperationConfig, returnType, resultKey, endpoint, constName, rbacMap string, extraVarValues map[string]any) string {
+	tag := bt + `json:"` + resultKey + `"` + bt
+	var parts []string
+	for _, a := range op.InlineArgs {
+		parts = append(parts, fmt.Sprintf("%q: %s", a.GQLVar, a.Name))
+	}
+	baseLit := "map[string]any{" + strings.Join(parts, ", ") + "}"
+	varAssign := mergeVarsExpr(baseLit, buildMapLit(extraVarValues), rbacMap)
+	return fmt.Sprintf(
+		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
+		varAssign, toPascalCase(resultKey), returnType, tag, endpoint, constName, returnType, op.Name, toPascalCase(resultKey))
+}
+
+func buildUpdateInlineBody(op OperationConfig, returnType, resultKey, endpoint, constName, rbacMap string, extraVarValues map[string]any) string {
+	tag := bt + `json:"` + resultKey + `"` + bt
+	var parts []string
+	var idArg string
+	for _, a := range op.InlineArgs {
+		parts = append(parts, fmt.Sprintf("%q: %s", a.GQLVar, a.Name))
+		if a.IsID {
+			idArg = a.Name
+		}
+	}
+	baseLit := "map[string]any{" + strings.Join(parts, ", ") + "}"
+	varAssign := mergeVarsExpr(baseLit, buildMapLit(extraVarValues), rbacMap)
+	if idArg == "" {
+		idArg = "id"
+	}
+	return fmt.Sprintf(
+		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s(%%s): %%w\", %s, err)\n\t}\n\treturn result.%s, nil",
+		varAssign, toPascalCase(resultKey), returnType, tag, endpoint, constName, returnType, op.Name, idArg, toPascalCase(resultKey))
+}
+
+func buildDatePaginatedBody(methodName, returnType, resultKey, endpoint, constName, argName, dateType string) string {
+	// Generates the per-resource fetch loop and date helper invocation.
+	// Uses %sCondition() builder (which the static-emit code must provide).
+	localVar := lcFirst(returnType) + "s"
+	return fmt.Sprintf(`vars := map[string]any{
+		"pageSize":  500,
+		"order":     map[string]any{"direction": "DESC"},
+		"condition": %sCondition(%s),
+	}
+	%s, err := c.fetchAll%ss(ctx, %s, vars, %q)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %%w", err)
+	}
+	return %s, nil`,
+		lcFirst(returnType), argName,
+		localVar, returnType, constName, resultKey,
+		methodName, localVar)
 }
 
 func buildGetBody(methodName, returnType, resultKey, endpoint, constName, idField, rbacMap string, extraVarValues map[string]any) string {
