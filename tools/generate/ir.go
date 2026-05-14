@@ -260,6 +260,12 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 		allowedInputFields[f] = true
 	}
 
+	// Build a set of nullable input fields that should use pointer types.
+	nullableFields := make(map[string]bool)
+	for _, f := range res.NullableInputFields {
+		nullableFields[f] = true
+	}
+
 	for _, op := range res.Operations {
 		if op.InputType == "" || seen[op.InputType] {
 			continue
@@ -278,9 +284,13 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 				continue
 			}
 			goName := toPascalCase(f.Name)
+			goType := resolveInputGoType(f.Type, schema, scalars)
+			if nullableFields[f.Name] && !strings.HasPrefix(goType, "[]") && !strings.HasPrefix(goType, "*") {
+				goType = "*" + goType
+			}
 			fields = append(fields, IRField{
 				Name: goName,
-				Type: resolveInputGoType(f.Type, schema, scalars),
+				Type: goType,
 			})
 			buildVars = append(buildVars, BuildVar{
 				Key:      f.Name,
@@ -458,7 +468,11 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 			}
 			return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(input: $input) {\n\t\t%s\n\t}\n}\n", gqlName, allDecls, gqlName, fragRef), nil
 		}
-		return buildCreateStr(schema, op.InputType, gqlName, fragRef, res.InputFields, extraDecls)
+		opInputFields := res.InputFields
+		if len(op.InputFields) > 0 {
+			opInputFields = op.InputFields
+		}
+		return buildCreateStr(schema, op.InputType, gqlName, fragRef, opInputFields, extraDecls)
 
 	case "update":
 		if op.InputType == "" {
@@ -471,7 +485,11 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 			}
 			return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(%s: $%s, input: $input) {\n\t\t%s\n\t}\n}\n", gqlName, allDecls, gqlName, idField, idField, fragRef), nil
 		}
-		return buildUpdateStr(schema, op.InputType, gqlName, fragRef, idField, res.InputFields, extraDecls)
+		opInputFields := res.InputFields
+		if len(op.InputFields) > 0 {
+			opInputFields = op.InputFields
+		}
+		return buildUpdateStr(schema, op.InputType, gqlName, fragRef, idField, opInputFields, extraDecls)
 
 	case "singleton_get":
 		// Use alias when resultKey differs from gqlName (e.g. "downloads: getOrganizationDownloads").
