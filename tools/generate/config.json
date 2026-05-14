@@ -548,6 +548,102 @@
       ]
     },
     {
+      "file": "user.go",
+      "typeName": "User",
+      "idField": "id",
+      "fields": ["id", "email", "sub", "connection", "assignedRoles", "assignedGroups", "lastLogin", "source", "receiveEmailAlert", "emailAlertMinSeverity", "extraAttrs", "created", "updated"],
+      "nestedTypes": [
+        {
+          "schemaName": "Connection",
+          "goName": "UserConnection",
+          "fields": ["id", "name", "requireKnownUsers", "source"]
+        },
+        {
+          "schemaName": "Role",
+          "goName": "UserRole",
+          "fields": ["id", "name"]
+        },
+        {
+          "schemaName": "Group",
+          "goName": "UserGroup",
+          "fields": ["id", "name", "assignedRoles"],
+          "directiveFields": {
+            "assignedRoles": "@include(if: $RBAC_Role)"
+          }
+        }
+      ],
+      "directiveFields": {
+        "sub": "@skip(if: $hasLimitedAppAccess)",
+        "connection": "@include(if: $RBAC_Connection)",
+        "assignedRoles": "@skip(if: $hasLimitedAppAccess) @include(if: $RBAC_Role)",
+        "assignedGroups": "@skip(if: $hasLimitedAppAccess) @include(if: $RBAC_Group)",
+        "source": "@skip(if: $hasLimitedAppAccess)",
+        "extraAttrs": "@skip(if: $hasLimitedAppAccess)"
+      },
+      "extraVars": {
+        "hasLimitedAppAccess": "Boolean!",
+        "RBAC_Connection": "Boolean!",
+        "RBAC_Role": "Boolean!",
+        "RBAC_Group": "Boolean!"
+      },
+      "extraVarValues": {
+        "hasLimitedAppAccess": false
+      },
+      "rbacMap": "rbacUser",
+      "nullableResponseFields": ["sub", "lastLogin"],
+      "nullableInputFields": ["connectionId"],
+      "optionalInputFields": ["email"],
+      "operations": [
+        {
+          "name": "CreateUser",
+          "gqlName": "createUser",
+          "kind": "create",
+          "endpoint": "/app",
+          "resultKey": "createUser",
+          "inputType": "UserCreateInput",
+          "inputTypeGoName": "UserInput"
+        },
+        {
+          "name": "GetUser",
+          "gqlName": "getUser",
+          "kind": "get",
+          "endpoint": "/app",
+          "resultKey": "getUser"
+        },
+        {
+          "name": "UpdateUser",
+          "gqlName": "updateUser",
+          "kind": "update",
+          "endpoint": "/app",
+          "resultKey": "updateUser",
+          "inputType": "UserCreateInput",
+          "inputTypeGoName": "UserInput",
+          "inputFields": ["roleIds", "groupIds", "receiveEmailAlert", "emailAlertMinSeverity"]
+        },
+        {
+          "name": "DeleteUser",
+          "gqlName": "deleteUser",
+          "kind": "delete",
+          "endpoint": "/app",
+          "resultKey": "deleteUser"
+        },
+        {
+          "name": "ListUsers",
+          "gqlName": "listUsers",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listUsers",
+          "pagination": true,
+          "paginationVars": {
+            "direction": "ASC",
+            "field": "email",
+            "pageSize": 100,
+            "hasLimitedAppAccess": false
+          }
+        }
+      ]
+    },
+    {
       "file": "change_management.go",
       "typeName": "ChangeManagementConfig",
       "gqlTypeName": "Organization",
