@@ -11,11 +11,12 @@ import (
 
 // Config is the top-level generator configuration.
 type Config struct {
-	SchemaPath string             `json:"schemaPath"`
-	OutputDir  string             `json:"outputDir"`
-	Scalars    map[string]string  `json:"scalars"`
-	Resources  []ResourceConfig   `json:"resources"`
-	Statics    []StaticEmitConfig `json:"statics,omitempty"`
+	SchemaPath           string             `json:"schemaPath"`
+	FilteredSchemaPath   string             `json:"filteredSchemaPath,omitempty"`
+	OutputDir            string             `json:"outputDir"`
+	Scalars              map[string]string  `json:"scalars"`
+	Resources            []ResourceConfig   `json:"resources"`
+	Statics              []StaticEmitConfig `json:"statics,omitempty"`
 }
 
 // StaticEmitConfig defines a verbatim file to format-validate and copy into the output directory.
