@@ -7,6 +7,7 @@ lint:
 	golangci-lint run
 
 generate:
+	cd tools/generate; go run .
 	cd tools; go generate ./...
 
 fmt:
