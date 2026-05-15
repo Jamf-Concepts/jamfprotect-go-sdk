@@ -12,14 +12,6 @@ import (
 
 // ── Query/Mutation constants ──────────────────────────────────────────────────
 
-const betaAcceptanceStatusFields = `
-fragment BetaAcceptanceStatusFields on BetaAcceptanceStatus {
-	betaName
-	acceptedTimestamp
-	acceptedUser
-}
-`
-
 const getBetaAcceptanceStatusQuery = `
 query getAppInitializationData {
 	getAppInitializationData {

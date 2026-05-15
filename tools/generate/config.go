@@ -127,6 +127,8 @@ type OperationConfig struct {
 	TopLevelArgs       []TopLevelArg       `json:"topLevelArgs,omitempty"`       // extra GQL args forwarded as top-level field args alongside input (e.g. uuid in listInsightComputers)
 	FieldArgs          string              `json:"fieldArgs,omitempty"`          // verbatim GQL field argument string appended to the field call (e.g. "date: $date")
 	NoSelection        bool                `json:"noSelection,omitempty"`        // suppress { ... } selection set (for scalar-return singleton_get, e.g. String return)
+	GQLVars            map[string]string   `json:"gqlVars,omitempty"`            // extra GQL var declarations with no Go-arg counterpart (varName → GQL type); values come from ExtraVarValues
+	ResultPathLeaf     bool                `json:"resultPathLeaf,omitempty"`     // for singleton_get: treat the last segment of ResultPath as a scalar leaf field in the query (Go result struct still uses full path)
 }
 
 // MultiWrappedInput declares one typed GraphQL input variable for a multi_wrapped_update mutation.

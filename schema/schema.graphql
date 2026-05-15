@@ -90,6 +90,10 @@ type AlertConnection {
 	items: [Alert]
 	pageInfo: PageInfo
 }
+type AlertCount {
+	severity: SEVERITY
+	count: Int
+}
 type AlertDataConfig {
 	attrs: [String!]
 	related: [ALERT_DATA_RELATED_ENUM!]
@@ -490,6 +494,14 @@ type ComputerConnection {
 	items: [Computer]
 	pageInfo: PageInfo
 }
+input ComputerCountQueryInput {
+	next: String
+	pageSize: Int
+	filter: ComputerFiltersInput
+}
+type ComputerCountResponse {
+	computers: Int
+}
 input ComputerEditableInput {
 	label: String
 	tags: [String]
@@ -603,6 +615,18 @@ input ConnectionQueryInput {
 	next: String
 	order: ConnectionOrderInput
 	pageSize: Int
+}
+input CountQueryInput {
+	computers: ComputerFiltersInput
+	alerts: AlertFiltersInput
+	alertsComputers: AlertFiltersInput
+	insightsComputers: ComputerFiltersInput
+}
+type CountResponse {
+	computers: Int
+	alerts: Int
+	alertsComputers: Int
+	insightsComputers: Int
 }
 type CustomEngineConfig {
 	MalwareRiskware: CustomEngineMode!
@@ -1251,6 +1275,17 @@ type Retention {
 	cold: ColdStorageRetention
 	updated: AWSDateTime
 }
+type RiskyComputer {
+	computer: Computer
+	alertCounts: [AlertCount]
+}
+type RiskyComputerConnection {
+	items: [RiskyComputer]
+}
+input RiskyComputersInput {
+	createdInterval: String
+	limit: Int
+}
 type Role {
 	id: ID
 	name: String
@@ -1687,6 +1722,8 @@ type Query {
 	getApiClient(clientId: ID!): ApiClient
 	getAppInitializationData: AppInitializationData
 	getComputer(uuid: ID!): Computer
+	getComputerCount(input: ComputerCountQueryInput): ComputerCountResponse
+	getCount(input: CountQueryInput): CountResponse
 	getExceptionSet(uuid: ID!): ExceptionSet
 	getFleetComplianceBaselineScore(date: AWSDate): ComplianceBaselineScore
 	getGroup(id: ID!): Group
@@ -1714,6 +1751,7 @@ type Query {
 	listInsights: [Insight]
 	listPlans(input: PlanQueryInput): PlanConnection
 	listPreventLists(input: PreventListQueryInput): PreventListConnection
+	listRiskiestComputers(input: RiskyComputersInput): RiskyComputerConnection
 	listRoles(input: RoleQueryInput): RoleConnection
 	listTelemetriesV2(input: TelemetryQueryInput): TelemetryConnectionV2
 	listUSBControlSets(input: USBControlSetsQueryInput): USBControlSetConnection

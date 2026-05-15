@@ -12,12 +12,6 @@ import (
 
 // ── Query/Mutation constants ──────────────────────────────────────────────────
 
-const changeManagementConfigFields = `
-fragment ChangeManagementConfigFields on Organization {
-	configFreeze
-}
-`
-
 const getConfigFreezeQuery = `
 query getAppInitializationData {
 	getAppInitializationData {
