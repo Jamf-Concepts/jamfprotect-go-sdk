@@ -10,119 +10,113 @@ import (
 	"fmt"
 )
 
-const dataRetentionGetQuery = `
-query getDataRetention {
+// ── Query/Mutation constants ──────────────────────────────────────────────────
+
+const dataRetentionSettingsFields = `
+fragment DataRetentionSettingsFields on Retention {
+	database {
+		log {
+			recordCount
+			numberOfDays
+		}
+		alert {
+			recordCount
+			numberOfDays
+		}
+	}
+	cold {
+		alert {
+			numberOfDays
+		}
+	}
+	updated
+}
+`
+
+const getDataRetentionQuery = `
+query getOrganization {
 	getOrganization {
-		...DataRetentionFields
-	}
-}
-
-fragment DataRetentionFields on Organization {
-	retention {
-		database {
-			log {
-				recordCount
-				numberOfDays
-			}
-			alert {
-				recordCount
-				numberOfDays
-			}
-		}
-		cold {
-			alert {
-				numberOfDays
-			}
-		}
-		updated
-	}
-}
-`
-
-const dataRetentionUpdateMutation = `
-mutation updateOrganizationRetention($databaseLogDays: Int!, $databaseAlertDays: Int!, $coldAlertDays: Int!) {
-	updateOrganizationRetention(
-		input: {
-			retention: {
-				database: {
-					log: {numberOfDays: $databaseLogDays}
-					alert: {numberOfDays: $databaseAlertDays}
-				}
-				cold: {alert: {numberOfDays: $coldAlertDays}}
-			}
-		}
-	) {
 		retention {
-			database {
-				log { recordCount numberOfDays }
-				alert { recordCount numberOfDays }
-			}
-			cold {
-				alert { numberOfDays }
-			}
-			updated
+			...DataRetentionSettingsFields
 		}
 	}
 }
-`
+` + dataRetentionSettingsFields
 
-// DataRetentionDays represents a retention record count and days object.
-type DataRetentionDays struct {
-	RecordCount  int64 `json:"recordCount"`
-	NumberOfDays int64 `json:"numberOfDays"`
+const updateDataRetentionMutation = `
+mutation updateOrganizationRetention($databaseLogDays: Int!, $databaseAlertDays: Int!, $coldAlertDays: Int!) {
+	updateOrganizationRetention(input: {retention: {database: {log: {numberOfDays: $databaseLogDays}, alert: {numberOfDays: $databaseAlertDays}}, cold: {alert: {numberOfDays: $coldAlertDays}}}}) {
+		retention {
+			...DataRetentionSettingsFields
+		}
+	}
 }
+` + dataRetentionSettingsFields
 
-// DataRetentionDatabase represents database retention settings.
-type DataRetentionDatabase struct {
-	Log   DataRetentionDays `json:"log"`
-	Alert DataRetentionDays `json:"alert"`
-}
+// ── Input types ───────────────────────────────────────────────────────────────
 
-// DataRetentionCold represents cold storage retention settings.
-type DataRetentionCold struct {
-	Alert DataRetentionDays `json:"alert"`
-}
-
-// DataRetentionSettings represents organization retention settings.
-type DataRetentionSettings struct {
-	Database DataRetentionDatabase `json:"database"`
-	Cold     DataRetentionCold     `json:"cold"`
-	Updated  string                `json:"updated"`
-}
-
-// DataRetentionInput captures updates for retention settings.
+// DataRetentionInput is the input for dataRetention operations.
 type DataRetentionInput struct {
 	DatabaseLogDays   int64
 	DatabaseAlertDays int64
 	ColdAlertDays     int64
 }
 
-// GetDataRetention retrieves organization retention settings.
+// ── Response types ────────────────────────────────────────────────────────────
+
+// DataRetentionDatabase contains DbStorageRetention data.
+type DataRetentionDatabase struct {
+	Log   *DataRetentionDays `json:"log"`
+	Alert *DataRetentionDays `json:"alert"`
+}
+
+// DataRetentionCold contains ColdStorageRetention data.
+type DataRetentionCold struct {
+	Alert *DataRetentionColdDays `json:"alert"`
+}
+
+// DataRetentionDays contains RecordCount data.
+type DataRetentionDays struct {
+	RecordCount  int64 `json:"recordCount"`
+	NumberOfDays int64 `json:"numberOfDays"`
+}
+
+// DataRetentionColdDays contains ColdStorageSettings data.
+type DataRetentionColdDays struct {
+	NumberOfDays int64 `json:"numberOfDays"`
+}
+
+// DataRetentionSettings represents a Jamf Protect dataRetentionSettings.
+type DataRetentionSettings struct {
+	Database *DataRetentionDatabase `json:"database"`
+	Cold     *DataRetentionCold     `json:"cold"`
+	Updated  string                 `json:"updated"`
+}
+
+// ── Client methods ────────────────────────────────────────────────────────────
+
+// GetDataRetention retrieves the dataRetentionSettings.
 func (c *Client) GetDataRetention(ctx context.Context) (DataRetentionSettings, error) {
 	var result struct {
 		GetOrganization struct {
 			Retention DataRetentionSettings `json:"retention"`
 		} `json:"getOrganization"`
 	}
-	if err := c.transport.DoGraphQL(ctx, "/app", dataRetentionGetQuery, nil, &result); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", getDataRetentionQuery, nil, &result); err != nil {
 		return DataRetentionSettings{}, fmt.Errorf("GetDataRetention: %w", err)
 	}
 	return result.GetOrganization.Retention, nil
 }
 
-// UpdateDataRetention updates organization retention settings.
+// UpdateDataRetention updates the dataRetentionSettings.
 func (c *Client) UpdateDataRetention(ctx context.Context, input DataRetentionInput) (DataRetentionSettings, error) {
-	vars := map[string]any{
-		"databaseLogDays":   input.DatabaseLogDays,
-		"databaseAlertDays": input.DatabaseAlertDays,
-		"coldAlertDays":     input.ColdAlertDays,
-	}
+	vars := map[string]any{"databaseLogDays": input.DatabaseLogDays, "databaseAlertDays": input.DatabaseAlertDays, "coldAlertDays": input.ColdAlertDays}
 	var result struct {
 		UpdateOrganizationRetention struct {
 			Retention DataRetentionSettings `json:"retention"`
 		} `json:"updateOrganizationRetention"`
 	}
-	if err := c.transport.DoGraphQL(ctx, "/app", dataRetentionUpdateMutation, vars, &result); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", updateDataRetentionMutation, vars, &result); err != nil {
 		return DataRetentionSettings{}, fmt.Errorf("UpdateDataRetention: %w", err)
 	}
 	return result.UpdateOrganizationRetention.Retention, nil
