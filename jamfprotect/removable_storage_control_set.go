@@ -152,11 +152,11 @@ type ProductRuleInput struct {
 
 // RemovableStorageControlRuleInput is a nested input type.
 type RemovableStorageControlRuleInput struct {
-	Type           string               `json:"type"`
-	EncryptionRule *EncryptionRuleInput `json:"encryptionRule"`
-	VendorRule     *VendorRuleInput     `json:"vendorRule"`
-	SerialRule     *SerialRuleInput     `json:"serialRule"`
-	ProductRule    *ProductRuleInput    `json:"productRule"`
+	Type           string              `json:"type"`
+	EncryptionRule EncryptionRuleInput `json:"encryptionRule"`
+	VendorRule     VendorRuleInput     `json:"vendorRule"`
+	SerialRule     SerialRuleInput     `json:"serialRule"`
+	ProductRule    ProductRuleInput    `json:"productRule"`
 }
 
 // ── Response types ────────────────────────────────────────────────────────────

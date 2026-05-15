@@ -9,6 +9,13 @@ enum ACCOUNT_BUSINESS_TYPE_ENUM {
 	Education_High_Ed
 	Other
 }
+enum ALERT_DATA_RELATED_ENUM {
+	process
+	file
+	binary
+	user
+	group
+}
 enum ALERT_STATUS {
 	New
 	InProgress
@@ -18,6 +25,47 @@ enum ALERT_STATUS {
 enum ANALYTIC_SET_TYPE {
 	Prevent
 	Report
+}
+type ActionConfigs {
+	created: AWSDateTime
+	updated: AWSDateTime
+	description: String
+	name: String
+	hash: String
+	id: ID
+	clients: [ReportClient!]!
+	plans: [Plan!]!
+	alertConfig: ActionConfigsAlertConfig!
+}
+type ActionConfigsAlertConfig {
+	data: AlertDataConfigs!
+}
+input ActionConfigsAlertConfigInput {
+	data: AlertDataConfigsInput!
+}
+type ActionConfigsConnection {
+	items: [ActionConfigs]
+	pageInfo: PageInfo
+}
+input ActionConfigsInput {
+	name: String!
+	description: String!
+	clients: [ReportClientInput!]
+	alertConfig: ActionConfigsAlertConfigInput
+}
+enum ActionConfigsOrderField {
+	created
+	updated
+	name
+}
+input ActionConfigsOrderInput {
+	direction: OrderDirection!
+	field: ActionConfigsOrderField!
+}
+input ActionConfigsQueryInput {
+	next: String
+	order: ActionConfigsOrderInput
+	pageSize: Int
 }
 type Alert {
 	computer: Computer
@@ -41,6 +89,46 @@ type AlertAction {
 type AlertConnection {
 	items: [Alert]
 	pageInfo: PageInfo
+}
+type AlertDataConfig {
+	attrs: [String!]
+	related: [ALERT_DATA_RELATED_ENUM!]
+}
+input AlertDataConfigInput {
+	attrs: [String!]
+	related: [ALERT_DATA_RELATED_ENUM!]
+}
+type AlertDataConfigs {
+	binary: AlertDataConfig!
+	clickEvent: AlertDataConfig!
+	downloadEvent: AlertDataConfig!
+	file: AlertDataConfig!
+	fsEvent: AlertDataConfig!
+	group: AlertDataConfig!
+	procEvent: AlertDataConfig!
+	process: AlertDataConfig!
+	screenshotEvent: AlertDataConfig!
+	usbEvent: AlertDataConfig!
+	user: AlertDataConfig!
+	gkEvent: AlertDataConfig
+	keylogRegisterEvent: AlertDataConfig
+	mrtEvent: AlertDataConfig
+}
+input AlertDataConfigsInput {
+	binary: AlertDataConfigInput!
+	clickEvent: AlertDataConfigInput!
+	downloadEvent: AlertDataConfigInput!
+	file: AlertDataConfigInput!
+	fsEvent: AlertDataConfigInput!
+	group: AlertDataConfigInput!
+	procEvent: AlertDataConfigInput!
+	process: AlertDataConfigInput!
+	screenshotEvent: AlertDataConfigInput!
+	usbEvent: AlertDataConfigInput!
+	user: AlertDataConfigInput!
+	gkEvent: AlertDataConfigInput!
+	keylogRegisterEvent: AlertDataConfigInput!
+	mrtEvent: AlertDataConfigInput!
 }
 type AlertFact {
 	name: String
@@ -286,6 +374,18 @@ input AuditLogsDateRangeConditionInput {
 input AuditLogsOrderInput {
 	direction: OrderDirection
 }
+type BatchConfig {
+	sizeIndex: Int!
+	windowInSeconds: Int!
+	sizeInBytes: Int
+	delimiter: String
+}
+input BatchConfigInput {
+	sizeIndex: Int!
+	windowInSeconds: Int!
+	sizeInBytes: Int
+	delimiter: String
+}
 enum BeaconStatus {
 	ENABLED
 	DISABLED
@@ -304,6 +404,13 @@ input BetaAcceptanceStatusInput {
 }
 enum BetaName {
 	NGTP_BETA
+}
+enum CLIENT_TYPE {
+	Http
+	LogFile
+	JamfCloud
+	Kafka
+	Syslog
 }
 enum COMPUTER_CONNECTION_STATUS_ENUM {
 	Connected
@@ -329,6 +436,14 @@ type ColdStorageSettings {
 }
 input ColdStorageSettingsInput {
 	numberOfDays: Int!
+}
+type CommsConfig {
+	fqdn: String
+	protocol: String
+}
+input CommsConfigInput {
+	fqdn: String!
+	protocol: String!
 }
 type ComplianceBaselineScore {
 	updated: AWSDate
@@ -488,6 +603,25 @@ input ConnectionQueryInput {
 	next: String
 	order: ConnectionOrderInput
 	pageSize: Int
+}
+type CustomEngineConfig {
+	MalwareRiskware: CustomEngineMode!
+	AdversaryTactics: CustomEngineMode!
+	SystemTampering: CustomEngineMode!
+	FilelessThreats: CustomEngineMode!
+	Experimental: CustomEngineMode!
+}
+input CustomEngineConfigInput {
+	MalwareRiskware: CustomEngineMode!
+	AdversaryTactics: CustomEngineMode!
+	SystemTampering: CustomEngineMode!
+	FilelessThreats: CustomEngineMode!
+	Experimental: CustomEngineMode!
+}
+enum CustomEngineMode {
+	PREVENT
+	REPORT
+	DISABLED
 }
 type DataStream {
 	enabled: Boolean
@@ -712,6 +846,10 @@ input GroupUpdateInput {
 	accessGroup: Boolean
 	roleIds: [ID]
 }
+type HttpHeader {
+	header: String!
+	value: String!
+}
 enum IGNORE_ACTIVITY {
 	Analytics
 	Telemetry
@@ -724,6 +862,24 @@ enum IGNORE_TYPE {
 	PathExemption
 	PlatformBinary
 	User
+}
+enum InfoSyncAttrs {
+	insights
+	arch
+	hostName
+	kernelVersion
+	memorySize
+	modelName
+	osMajor
+	osMinor
+	osPatch
+	osString
+	serial
+}
+input InfoSyncInput {
+	infoSyncInterval: Int
+	insightsSyncInterval: Int!
+	attrs: [InfoSyncAttrs]!
 }
 type Insight {
 	uuid: ID
@@ -743,6 +899,13 @@ input InsightInput {
 input InternalAnalyticInput {
 	tenantActions: [AnalyticActionsInput]
 	tenantSeverity: SEVERITY
+}
+enum LOG_LEVEL_ENUM {
+	ERROR
+	WARNING
+	INFO
+	DEBUG
+	VERBOSE
 }
 enum ORGANIZATION_GROUPS_ENUM {
 	PROD
@@ -816,10 +979,93 @@ type PageInfo {
 	total: Int
 }
 type Plan {
+	actionConfigs: ActionConfigs
+	created: AWSDateTime
+	description: String
 	hash: String
 	id: ID!
 	uuid: ID
 	name: String
+	updated: AWSDateTime
+	logLevel: LOG_LEVEL_ENUM
+	profileVersion: Int!
+	exceptionSets: [ExceptionSet!]
+	telemetry: Telemetry
+	telemetryV2: TelemetryV2
+	autoUpdate: Boolean
+	analyticSets: [PlanAnalyticSet!]
+	infoSync: infoSync
+	commsConfig: CommsConfig
+	signaturesFeedConfig: SignaturesFeedConfig
+	usbControlSet: USBControlSet
+	threatPreventionStrategy: ThreatPreventionStrategy!
+	customEngineConfig: CustomEngineConfig
+}
+type PlanAnalyticSet {
+	type: ANALYTIC_SET_TYPE!
+	analyticSet: AnalyticSet!
+}
+input PlanAnalyticSetInput {
+	uuid: ID!
+	type: ANALYTIC_SET_TYPE!
+}
+type PlanConnection {
+	items: [Plan]
+	pageInfo: PageInfo
+}
+input PlanFiltersInput {
+	analyticSets: TableStringFilterInput
+	telemetry: TableStringFilterInput
+	telemetryV2: TableStringFilterInput
+	actionConfigs: TableStringFilterInput
+	exceptionSets: TableStringFilterInput
+	usbControlSet: TableStringFilterInput
+	signaturesFeedConfig: TableJsonFilterInput
+	name: TableStringFilterInput
+	created: TableDatetimeFilterInput
+	or: [PlanFiltersInput!]
+	and: [PlanFiltersInput!]
+	not: PlanFiltersInput
+}
+input PlanInput {
+	actionConfigs: ID!
+	description: String!
+	name: String!
+	logLevel: LOG_LEVEL_ENUM
+	exceptionSets: [ID!]
+	analyticSets: [PlanAnalyticSetInput!]
+	telemetry: ID
+	telemetryV2: ID
+	autoUpdate: Boolean
+	infoSync: InfoSyncInput
+	commsConfig: CommsConfigInput
+	signaturesFeedConfig: SignaturesFeedConfigInput
+	usbControlSet: ID
+	threatPreventionStrategy: ThreatPreventionStrategy
+	customEngineConfig: CustomEngineConfigInput
+}
+enum PlanOrderField {
+	created
+	updated
+	name
+	infoSyncInterval
+	autoUpdate
+	commsConfig
+	signaturesFeedConfig
+	actionConfigs
+	telemetry
+	telemetryV2
+	usbControlSet
+}
+input PlanOrderInput {
+	direction: OrderDirection!
+	field: PlanOrderField!
+}
+input PlanQueryInput {
+	next: String
+	order: PlanOrderInput
+	filter: PlanFiltersInput
+	pageSize: Int
 }
 type PreventList {
 	id: ID
@@ -880,6 +1126,22 @@ input ProductValueInput {
 	vendor: String!
 	product: String!
 }
+input ProfileOptionsInput {
+	pppc: Boolean
+	token: Boolean
+	tokenOptions: ProfileTokenOptionsInput
+	ca: Boolean
+	csr: Boolean
+	websocket: Boolean
+	sign: Boolean
+	systemExtension: Boolean
+	serviceManagement: Boolean
+	configVersion: Int
+}
+input ProfileTokenOptionsInput {
+	xpc: Boolean!
+	keychain_client_id: Boolean
+}
 enum RBAC_RESOURCE {
 	all
 	ActionConfigs
@@ -911,6 +1173,14 @@ enum RBAC_RESOURCE {
 	UninstallerToken
 	User
 }
+enum REPORT_TYPE {
+	AlertHigh
+	AlertMedium
+	AlertLow
+	AlertInformational
+	Telemetry
+	UnifiedLogging
+}
 type RbacPermissions {
 	R: [RBAC_RESOURCE!]
 	W: [RBAC_RESOURCE!]
@@ -923,6 +1193,20 @@ input RecordCountInput {
 	recordCount: Int
 	numberOfDays: Int!
 }
+type ReportClient {
+	id: ID!
+	type: CLIENT_TYPE!
+	supportedReports: [REPORT_TYPE!]!
+	batchConfig: BatchConfig!
+	params: ReportClientParams
+}
+input ReportClientInput {
+	type: CLIENT_TYPE!
+	supportedReports: [REPORT_TYPE!]!
+	batchConfig: BatchConfigInput!
+	params: AWSJSON!
+}
+union ReportClientParams
 type Retention {
 	database: DbStorageRetention
 	cold: ColdStorageRetention
@@ -969,6 +1253,17 @@ input SerialRuleInput {
 	messageAction: String
 	applyTo: USBCONTROL_ENCRYPTION_ENUM!
 	serials: [String!]!
+}
+type SignaturesFeedConfig {
+	mode: SignaturesFeedConfigEnum!
+}
+enum SignaturesFeedConfigEnum {
+	disabled
+	reportOnly
+	blocking
+}
+input SignaturesFeedConfigInput {
+	mode: SignaturesFeedConfigEnum!
 }
 input TableBooleanFilterInput {
 	isNull: Boolean
@@ -1032,6 +1327,10 @@ input TableStringFilterInput {
 	in: [String]
 	notIn: [String]
 }
+type Telemetry {
+	id: ID!
+	name: String!
+}
 type TelemetryConnectionV2 {
 	items: [TelemetryV2]
 	pageInfo: PageInfo
@@ -1071,6 +1370,11 @@ type TelemetryV2 {
 	plans: [Plan]
 	events: [String]!
 	fileHashing: Boolean!
+}
+enum ThreatPreventionStrategy {
+	LEGACY
+	MANAGED
+	CUSTOM_ENGINES
 }
 enum UNIFIED_LOGGING_LEVEL {
 	DEFAULT
@@ -1257,24 +1561,32 @@ input VendorRuleInput {
 	applyTo: USBCONTROL_ENCRYPTION_ENUM!
 	vendors: [String!]!
 }
+type infoSync {
+	insightsSyncInterval: Int
+	attrs: [InfoSyncAttrs]
+}
 type Mutation {
+	createActionConfigs(input: ActionConfigsInput!): ActionConfigs
 	createAnalytic(input: AnalyticInput!): Analytic
 	createAnalyticSet(input: AnalyticSetInput!): AnalyticSet
 	createApiClient(input: ApiClientInput!): ApiClient
 	createExceptionSet(input: ExceptionSetInput!): ExceptionSet
 	createGroup(input: GroupCreateInput!): Group
+	createPlan(input: PlanInput!): Plan
 	createPreventList(input: PreventListInput!): PreventList
 	createRole(input: RoleInput!): Role
 	createTelemetryV2(input: TelemetryInputV2!): TelemetryV2
 	createUSBControlSet(input: USBControlSetInput!): USBControlSet
 	createUnifiedLoggingFilter(input: UnifiedLoggingFilterInput!): UnifiedLoggingFilter
 	createUser(input: UserCreateInput!): User
+	deleteActionConfigs(id: ID!): ActionConfigs
 	deleteAnalytic(uuid: ID!): Analytic
 	deleteAnalyticSet(uuid: ID!): AnalyticSet
 	deleteApiClient(clientId: ID!): ApiClient
 	deleteComputer(uuid: ID!): Computer
 	deleteExceptionSet(uuid: ID!): ExceptionSet
 	deleteGroup(id: ID!): Group
+	deletePlan(id: ID!): Plan
 	deletePreventList(id: ID!): PreventList
 	deleteRole(id: ID!): Role
 	deleteTelemetryV2(id: ID!): TelemetryV2
@@ -1282,6 +1594,7 @@ type Mutation {
 	deleteUnifiedLoggingFilter(uuid: ID!): UnifiedLoggingFilter
 	deleteUser(id: ID!): User
 	setComputerPlan(input: ComputerPlan!, uuid: ID!): Computer
+	updateActionConfigs(id: ID!, input: ActionConfigsInput!): ActionConfigs
 	updateAlerts(input: AlertUpdateInput!): AlertConnection
 	updateAnalytic(input: AnalyticInput!, uuid: ID!): Analytic
 	updateAnalyticSet(uuid: ID!, input: AnalyticSetInput!): AnalyticSet
@@ -1295,6 +1608,7 @@ type Mutation {
 	updateOrganizationConfigFreeze(input: ConfigFreezeInput!): Organization
 	updateOrganizationForward(input: OrganizationForwardInput!): Organization
 	updateOrganizationRetention(input: OrganizationRetentionInput!): Organization
+	updatePlan(id: ID!, input: PlanInput!): Plan
 	updatePreventList(input: PreventListInput!, id: ID!): PreventList
 	updateRole(id: ID!, input: RoleInput!): Role
 	updateTelemetryV2(id: ID!, input: TelemetryInputV2!): TelemetryV2
@@ -1303,6 +1617,7 @@ type Mutation {
 	updateUser(id: ID!, input: UserUpdateInput!): User
 }
 type Query {
+	getActionConfigs(id: ID!): ActionConfigs
 	getAlert(uuid: ID!): Alert
 	getAlertStatusCounts(input: AlertFiltersInput): AlertStatusCountResponse
 	getAnalytic(uuid: ID!): Analytic
@@ -1315,12 +1630,15 @@ type Query {
 	getGroup(id: ID!): Group
 	getOrganization: Organization
 	getOrganizationDownloads: OrganizationDownload
+	getPlan(id: ID!): Plan
+	getPlansConfigProfile(id: ID!, input: ProfileOptionsInput): String
 	getPreventList(id: ID!): PreventList
 	getRole(id: ID!): Role
 	getTelemetryV2(id: ID!): TelemetryV2
 	getUSBControlSet(id: ID!): USBControlSet
 	getUnifiedLoggingFilter(uuid: ID!): UnifiedLoggingFilter
 	getUser(id: ID!): User
+	listActionConfigs(input: ActionConfigsQueryInput): ActionConfigsConnection
 	listAlerts(input: AlertQueryInput!): AlertConnection
 	listAnalyticSets(input: AnalyticSetsQueryInput): AnalyticSetConnection
 	listAnalytics: AnalyticConnection
@@ -1332,6 +1650,7 @@ type Query {
 	listGroups(input: GroupQueryInput): GroupConnection
 	listInsightComputers(uuid: ID!, input: ComputerQueryInput): ComputerConnection
 	listInsights: [Insight]
+	listPlans(input: PlanQueryInput): PlanConnection
 	listPreventLists(input: PreventListQueryInput): PreventListConnection
 	listRoles(input: RoleQueryInput): RoleConnection
 	listTelemetriesV2(input: TelemetryQueryInput): TelemetryConnectionV2

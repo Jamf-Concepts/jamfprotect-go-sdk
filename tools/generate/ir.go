@@ -81,11 +81,12 @@ type IRBuildVarsFunc struct {
 
 // BuildVar is one key-value entry in a buildXxxVariables return literal.
 type BuildVar struct {
-	Key      string // GQL variable name, e.g. "readResources"
-	GoAccess string // Go field name on the input struct, e.g. "ReadResources"
-	Optional bool   // if true, only include when non-zero
-	IsPtr    bool   // if true, dereference with *input.X (only meaningful when Optional)
-	IsSlice  bool   // if true, use != nil check instead of != "" (only meaningful when Optional)
+	Key          string // GQL variable name, e.g. "readResources"
+	GoAccess     string // Go field name on the input struct, e.g. "ReadResources"
+	Optional     bool   // if true, only include when non-zero
+	IsPtr        bool   // if true, dereference with *input.X (only meaningful when Optional)
+	IsSlice      bool   // if true, use != nil check instead of != "" (only meaningful when Optional)
+	ExplicitNull bool   // if true, emit tri-state: FooNull sentinel → nil, Foo != nil → set, else → omit
 }
 
 func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, error) {
@@ -211,8 +212,8 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 		fieldDef := schema.Types[base]
 		directive := res.DirectiveFields[fieldName]
 
-		// Interface fields with explicit union config emit inline fragments.
-		if fieldDef != nil && fieldDef.Kind == ast.Interface {
+		// Interface and union fields with explicit union config emit inline fragments.
+		if fieldDef != nil && (fieldDef.Kind == ast.Interface || fieldDef.Kind == ast.Union) {
 			if uf, ok := res.UnionFields[fieldName]; ok {
 				b.WriteString("\t" + fieldName + " {\n")
 				for _, cf := range uf.Common {
@@ -220,7 +221,7 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 				}
 				for _, typeName := range sortedStringKeys(uf.Variants) {
 					b.WriteString("\t\t... on " + typeName + " {\n")
-					writeFragmentSubFields(schema, typeName, uf.Variants[typeName], nil, nestedFieldLists, nestedDirectives, pathOverrides, fieldName, 3, &b)
+					writeFragmentSubFields(schema, typeName, uf.Variants[typeName], nil, nestedFieldLists, nestedDirectives, pathOverrides, fieldName, 3, &b, res.UnionFields)
 					b.WriteString("\t\t}\n")
 				}
 				b.WriteString("\t}\n")
@@ -245,7 +246,7 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 					subDirectives = override.DirectiveFields
 				}
 			}
-			writeFragmentSubFields(schema, base, subFields, subDirectives, nestedFieldLists, nestedDirectives, pathOverrides, fieldName, 2, &b)
+			writeFragmentSubFields(schema, base, subFields, subDirectives, nestedFieldLists, nestedDirectives, pathOverrides, fieldName, 2, &b, res.UnionFields)
 			b.WriteString("\t}\n")
 		} else {
 			if directive != "" {
@@ -261,8 +262,9 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 
 // writeFragmentSubFields recursively writes field selections for a schema type at the
 // given indentation depth. Object sub-fields are expanded using nestedFieldLists.
+// Union/interface fields with a matching entry in unionFields emit inline fragments.
 // currentPath tracks the dot-path from the main type root, enabling path-based overrides.
-func writeFragmentSubFields(schema *ast.Schema, typeName string, allowedFields []string, directives map[string]string, nestedFieldLists map[string][]string, nestedDirectives map[string]map[string]string, pathOverrides map[string]NestedTypeConfig, currentPath string, depth int, b *strings.Builder) {
+func writeFragmentSubFields(schema *ast.Schema, typeName string, allowedFields []string, directives map[string]string, nestedFieldLists map[string][]string, nestedDirectives map[string]map[string]string, pathOverrides map[string]NestedTypeConfig, currentPath string, depth int, b *strings.Builder, unionFields map[string]UnionFieldConfig) {
 	def := schema.Types[typeName]
 	if def == nil {
 		return
@@ -287,6 +289,24 @@ func writeFragmentSubFields(schema *ast.Schema, typeName string, allowedFields [
 		fieldDef := schema.Types[base]
 		directive := directives[fieldName]
 		childPath := currentPath + "." + fieldName
+
+		// Interface and union fields with union config emit inline fragments.
+		if fieldDef != nil && (fieldDef.Kind == ast.Interface || fieldDef.Kind == ast.Union) {
+			if uf, ok := unionFields[fieldName]; ok {
+				fmt.Fprintf(b, "%s%s {\n", indent, fieldName)
+				for _, cf := range uf.Common {
+					fmt.Fprintf(b, "%s\t%s\n", indent, cf)
+				}
+				for _, variantName := range sortedStringKeys(uf.Variants) {
+					fmt.Fprintf(b, "%s\t... on %s {\n", indent, variantName)
+					writeFragmentSubFields(schema, variantName, uf.Variants[variantName], nil, nestedFieldLists, nestedDirectives, pathOverrides, childPath, depth+2, b, unionFields)
+					fmt.Fprintf(b, "%s\t}\n", indent)
+				}
+				fmt.Fprintf(b, "%s}\n", indent)
+				continue
+			}
+		}
+
 		if fieldDef != nil && (fieldDef.Kind == ast.Object || fieldDef.Kind == ast.Interface) {
 			if directive != "" {
 				fmt.Fprintf(b, "%s%s %s {\n", indent, fieldName, directive)
@@ -303,7 +323,7 @@ func writeFragmentSubFields(schema *ast.Schema, typeName string, allowedFields [
 					subDirectives = override.DirectiveFields
 				}
 			}
-			writeFragmentSubFields(schema, base, subFields, subDirectives, nestedFieldLists, nestedDirectives, pathOverrides, childPath, depth+1, b)
+			writeFragmentSubFields(schema, base, subFields, subDirectives, nestedFieldLists, nestedDirectives, pathOverrides, childPath, depth+1, b, unionFields)
 			fmt.Fprintf(b, "%s}\n", indent)
 		} else {
 			if directive != "" {
@@ -347,14 +367,12 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 		base := baseTypeName(f.Type)
 		fieldDef := schema.Types[base]
 
-		// Interface fields with explicit union config build a merged flat struct.
-		if fieldDef != nil && fieldDef.Kind == ast.Interface {
+		// Interface and union fields with explicit union config build a merged flat struct.
+		if fieldDef != nil && (fieldDef.Kind == ast.Interface || fieldDef.Kind == ast.Union) {
 			if uf, ok := res.UnionFields[fieldName]; ok {
 				var unionGoType string
 				if f.Type.Elem != nil {
 					unionGoType = "[]" + uf.GoStruct
-				} else if !f.Type.NonNull {
-					unionGoType = "*" + uf.GoStruct
 				} else {
 					unionGoType = uf.GoStruct
 				}
@@ -422,10 +440,18 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 		}
 	}
 
+	seenGoNames := make(map[string]bool)
+
 	// BFS: generate each nested struct and enqueue its own Object sub-fields.
 	for len(queue) > 0 {
 		item := queue[0]
 		queue = queue[1:]
+
+		// Skip duplicate generation when multiple schema types share a Go name.
+		if seenGoNames[item.goName] {
+			continue
+		}
+		seenGoNames[item.goName] = true
 
 		var fieldsList []string
 		var renames map[string]string
@@ -474,6 +500,28 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 			}
 			base := baseTypeName(subf.Type)
 			childDef := schema.Types[base]
+			// Union fields with a union config generate a merged flat struct in-place.
+			if childDef != nil && childDef.Kind == ast.Union {
+				if uf, ok := res.UnionFields[fName]; ok && !seenNested[base] {
+					seenNested[base] = true
+					mergedStruct, subObjectBases, mergeErr := buildUnionMergedStruct(schema, childDef, uf, scalars, nestedGoNames)
+					if mergeErr != nil {
+						return IRStruct{}, nil, fmt.Errorf("union field %q in %s: %w", fName, item.schemaName, mergeErr)
+					}
+					nestedTypes = append(nestedTypes, mergedStruct)
+					for _, subBase := range subObjectBases {
+						if !seenNested[subBase] {
+							seenNested[subBase] = true
+							subGoName := subBase
+							if o, ok := nestedGoNames[subBase]; ok {
+								subGoName = o
+							}
+							queue = append(queue, queueItem{subBase, subGoName, item.pathPrefix + "." + subBase, false})
+						}
+					}
+				}
+				continue
+			}
 			if childDef == nil || (childDef.Kind != ast.Object && childDef.Kind != ast.Interface) {
 				continue
 			}
@@ -623,6 +671,12 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 		optionalFields[f] = true
 	}
 
+	// Build a set of explicit-null input fields (three-state: null / omit / set).
+	explicitNullFields := make(map[string]bool)
+	for _, f := range res.ExplicitNullInputFields {
+		explicitNullFields[f] = true
+	}
+
 	for _, op := range res.Operations {
 		if op.InputType == "" || seen[op.InputType] {
 			continue
@@ -642,24 +696,45 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 				continue
 			}
 			goName := toPascalCase(f.Name)
-			goType := resolveInputGoType(f.Type, schema, scalars)
-			if nullableFields[f.Name] && !strings.HasPrefix(goType, "[]") && !strings.HasPrefix(goType, "*") {
-				goType = "*" + goType
+
+			// Knob D: mapInputFields overrides the Go type and skips nested recursion.
+			var goType string
+			if overrideType, ok := res.MapInputFields[f.Name]; ok {
+				goType = overrideType
+				base := baseTypeName(f.Type)
+				if childDef := schema.Types[base]; childDef != nil && childDef.Kind == ast.InputObject {
+					seenNested[base] = true
+				}
+			} else {
+				goType = resolveInputGoType(f.Type, schema, scalars)
+				if nullableFields[f.Name] && !strings.HasPrefix(goType, "[]") && !strings.HasPrefix(goType, "*") {
+					goType = "*" + goType
+				}
+				goType = applyInputTypeRenames(goType, res.InputTypeRenames)
 			}
-			// Apply input type renames to the Go type (strip any list/pointer prefix to check the base name).
-			goType = applyInputTypeRenames(goType, res.InputTypeRenames)
-			fields = append(fields, IRField{
-				Name: goName,
-				Type: goType,
-			})
-			isOptional := optionalFields[f.Name]
-			buildVars = append(buildVars, BuildVar{
-				Key:      f.Name,
-				GoAccess: goName,
-				Optional: isOptional,
-				IsPtr:    isOptional && strings.HasPrefix(goType, "*"),
-				IsSlice:  isOptional && strings.HasPrefix(goType, "[]"),
-			})
+
+			// Knob A: explicitNullInputFields emits a value field + a FooNull bool sentinel.
+			if explicitNullFields[f.Name] {
+				fields = append(fields, IRField{Name: goName, Type: goType})
+				fields = append(fields, IRField{Name: goName + "Null", Type: "bool"})
+				buildVars = append(buildVars, BuildVar{
+					Key:          f.Name,
+					GoAccess:     goName,
+					Optional:     true,
+					IsPtr:        true,
+					ExplicitNull: true,
+				})
+			} else {
+				fields = append(fields, IRField{Name: goName, Type: goType})
+				isOptional := optionalFields[f.Name]
+				buildVars = append(buildVars, BuildVar{
+					Key:      f.Name,
+					GoAccess: goName,
+					Optional: isOptional,
+					IsPtr:    isOptional && strings.HasPrefix(goType, "*"),
+					IsSlice:  isOptional && strings.HasPrefix(goType, "[]"),
+				})
+			}
 		}
 
 		goInputName := op.InputType
@@ -681,7 +756,7 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 		})
 
 		// Recursively generate nested InputObject types (with json tags, in dependency order).
-		nested, err := buildNestedInputTypes(schema, op.InputType, seenNested, scalars, res.InputTypeRenames, res.NullableNestedInputFields)
+		nested, err := buildNestedInputTypes(schema, op.InputType, seenNested, scalars, res.InputTypeRenames, res.NullableNestedInputFields, res.InputFieldGoRenames)
 		if err != nil {
 			return nil, nil, fmt.Errorf("nested input types for %s: %w", op.InputType, err)
 		}
@@ -750,7 +825,8 @@ func applyInputTypeRenames(goType string, renames map[string]string) string {
 // referenced by the fields of the given schema input type. The generated structs include
 // json tags (required for direct serialisation into vars maps).
 // nullableNestedFields maps schema type name → field names that should use *T + omitempty json tag.
-func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]bool, scalars map[string]string, renames map[string]string, nullableNestedFields map[string][]string) ([]IRStruct, error) {
+// inputFieldGoRenames maps schema type name → (schema field name → Go field name override).
+func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]bool, scalars map[string]string, renames map[string]string, nullableNestedFields map[string][]string, inputFieldGoRenames map[string]map[string]string) ([]IRStruct, error) {
 	def := schema.Types[typeName]
 	if def == nil {
 		return nil, fmt.Errorf("type %q not found in schema", typeName)
@@ -768,7 +844,7 @@ func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]
 		seen[base] = true
 
 		// Recurse to get dependencies first.
-		nested, err := buildNestedInputTypes(schema, base, seen, scalars, renames, nullableNestedFields)
+		nested, err := buildNestedInputTypes(schema, base, seen, scalars, renames, nullableNestedFields, inputFieldGoRenames)
 		if err != nil {
 			return nil, err
 		}
@@ -784,6 +860,9 @@ func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]
 			nullableSet[fn] = true
 		}
 
+		// Knob B: per-field Go name overrides for this schema type.
+		fieldGoRenames := inputFieldGoRenames[base]
+
 		var fields []IRField
 		for _, nf := range childDef.Fields {
 			nfGoType := resolveInputGoType(nf.Type, schema, scalars)
@@ -793,8 +872,12 @@ func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]
 				nfGoType = "*" + nfGoType
 				jsonTag += ",omitempty"
 			}
+			goFieldName := toPascalCase(nf.Name)
+			if override, ok := fieldGoRenames[nf.Name]; ok {
+				goFieldName = override
+			}
 			fields = append(fields, IRField{
-				Name:    toPascalCase(nf.Name),
+				Name:    goFieldName,
 				JSONTag: jsonTag,
 				Type:    nfGoType,
 			})
@@ -837,7 +920,11 @@ func buildVarsFuncBody(vars []BuildVar) string {
 	}
 	b.WriteString("\t}\n")
 	for _, v := range optional {
-		if v.IsPtr {
+		if v.ExplicitNull {
+			// Tri-state: NullSentinel → pass nil, ptr non-nil → pass value, else → omit.
+			fmt.Fprintf(&b, "\tif input.%sNull {\n\t\tvars[%q] = nil\n\t} else if input.%s != nil {\n\t\tvars[%q] = *input.%s\n\t}\n",
+				v.GoAccess, v.Key, v.GoAccess, v.Key, v.GoAccess)
+		} else if v.IsPtr {
 			fmt.Fprintf(&b, "\tif input.%s != nil {\n\t\tvars[%q] = *input.%s\n\t}\n", v.GoAccess, v.Key, v.GoAccess)
 		} else if v.IsSlice {
 			fmt.Fprintf(&b, "\tif input.%s != nil {\n\t\tvars[%q] = input.%s\n\t}\n", v.GoAccess, v.Key, v.GoAccess)
@@ -934,10 +1021,10 @@ func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, 
 		return IROperation{}, err
 	}
 
-	// Delete ops, list ops with inline item fields, ops with inline fields, and ops with noFragment
+	// Delete ops, list ops with inline item fields, ops with inline fields, noFragment, and noSelection
 	// don't use the fragment — omit fragConst so AppSync doesn't reject the unused fragment definition.
 	opFragConst := fragConst
-	if kind == "delete" || (kind == "list" && len(op.ListItemFields) > 0) || len(op.InlineFields) > 0 || op.NoFragment {
+	if kind == "delete" || (kind == "list" && len(op.ListItemFields) > 0) || len(op.InlineFields) > 0 || op.NoFragment || op.NoSelection {
 		opFragConst = ""
 	}
 	// list_simple doesn't necessarily need the fragment; honor NoFragment if set.
@@ -1056,6 +1143,10 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		for _, a := range op.InlineArgs {
 			allVarDecls = append(allVarDecls, "$"+a.GQLVar+": "+a.GQLType)
 		}
+		// Knob C: optional struct input — declare $input: T (no !) for singleton_get.
+		if op.InputType != "" && op.WrappedInput {
+			allVarDecls = append(allVarDecls, "$input: "+op.InputType)
+		}
 		varDecls := ""
 		if len(allVarDecls) > 0 {
 			varDecls = "(" + strings.Join(allVarDecls, ", ") + ")"
@@ -1064,6 +1155,10 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		fieldCallRef := fieldRef
 		if op.FieldArgs != "" {
 			fieldCallRef = fieldRef + "(" + op.FieldArgs + ")"
+		}
+		// NoSelection: scalar return — emit the field call with no selection set.
+		if op.NoSelection {
+			return fmt.Sprintf("\nquery %s%s {\n\t%s\n}\n", gqlName, varDecls, fieldCallRef), nil
 		}
 		// Wrap nested-result paths around the bodySelection.
 		body := wrapResultPath(op.ResultPath, fieldCallRef, bodySelection)
@@ -1302,7 +1397,7 @@ func buildMultiWrappedInputTypes(schema *ast.Schema, op OperationConfig, res Res
 		}
 
 		// Generate nested types (dependencies) first.
-		nested, err := buildNestedInputTypes(schema, schemaTypeName, seen, scalars, res.InputTypeRenames, res.NullableNestedInputFields)
+		nested, err := buildNestedInputTypes(schema, schemaTypeName, seen, scalars, res.InputTypeRenames, res.NullableNestedInputFields, res.InputFieldGoRenames)
 		if err != nil {
 			return nil, err
 		}
@@ -1563,14 +1658,26 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		if op.ReturnIsList {
 			retTypeExpr = "[]" + returnType
 		}
-		if len(op.InlineArgs) > 0 {
+		// Knob C: optional struct input appended after inline args.
+		if op.InputType != "" {
+			goInputName := op.InputType
+			if op.InputTypeGoName != "" {
+				goInputName = op.InputTypeGoName
+			}
+			if len(op.InlineArgs) > 0 {
+				sigStr, _ := inlineArgsSignature(op.InlineArgs)
+				sig = fmt.Sprintf("(ctx context.Context%s, input *%s) (%s, error)", sigStr, goInputName, retTypeExpr)
+			} else {
+				sig = fmt.Sprintf("(ctx context.Context, input *%s) (%s, error)", goInputName, retTypeExpr)
+			}
+		} else if len(op.InlineArgs) > 0 {
 			sigStr, _ := inlineArgsSignature(op.InlineArgs)
 			sig = fmt.Sprintf("(ctx context.Context%s) (%s, error)", sigStr, retTypeExpr)
 		} else {
 			sig = fmt.Sprintf("(ctx context.Context) (%s, error)", retTypeExpr)
 		}
 		doc = fmt.Sprintf("// %s retrieves the %s.", op.Name, lcFirst(returnType))
-		body = buildSingletonGetBody(op.Name, returnType, resultKey, endpoint, constName, op.ResultPath, op.ResultPathTypes, extraVarValues, rbacMap, op.ReturnIsList, op.InlineArgs)
+		body = buildSingletonGetBody(op.Name, returnType, resultKey, endpoint, constName, op.ResultPath, op.ResultPathTypes, extraVarValues, rbacMap, op.ReturnIsList, op.InlineArgs, op.InputType, op.InputTypeGoName)
 
 	case "list":
 		if len(op.TopLevelArgs) > 0 {
@@ -1694,7 +1801,7 @@ func mergeVarsExpr(baseLit, extraVarLit, rbacMap string) string {
 	return "vars := mergeVars(" + strings.Join(args, ", ") + ")"
 }
 
-func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constName, resultPath string, resultPathTypes []string, extraVarValues map[string]any, rbacMap string, returnIsList bool, inlineArgs []InlineArg) string {
+func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constName, resultPath string, resultPathTypes []string, extraVarValues map[string]any, rbacMap string, returnIsList bool, inlineArgs []InlineArg, inputType, inputTypeGoName string) string {
 	varsArg := "nil"
 	varAssignPrefix := ""
 	if len(inlineArgs) > 0 {
@@ -1743,6 +1850,21 @@ func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constNam
 			varAssignPrefix = "vars := " + baseLit + "\n\t"
 		}
 		varsArg = "vars"
+	}
+
+	// Knob C: optional struct input — conditionally set vars["input"] from *T arg.
+	if inputType != "" {
+		if varAssignPrefix == "" {
+			varAssignPrefix = "vars := map[string]any{}\n\t"
+			varsArg = "vars"
+		}
+		goInputName := inputType
+		if inputTypeGoName != "" {
+			goInputName = inputTypeGoName
+		}
+		baseName := strings.TrimSuffix(goInputName, "Input")
+		buildFn := "build" + baseName + "Variables"
+		varAssignPrefix += "if input != nil {\n\t\tvars[\"input\"] = " + buildFn + "(*input)\n\t}\n\t"
 	}
 
 	// Build the inner type expression and the zero-value expression for error returns.

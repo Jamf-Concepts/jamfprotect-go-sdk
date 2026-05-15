@@ -1,6 +1,6 @@
 module github.com/Jamf-Concepts/jamfprotect-go-sdk/tools/generate
 
-go 1.26.2
+go 1.26.3
 
 require (
 	github.com/agnivade/levenshtein v1.2.1 // indirect

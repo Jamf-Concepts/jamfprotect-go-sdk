@@ -46,7 +46,7 @@ func loadSchema(path string) (*ast.Schema, error) {
 var goInitialisms = map[string]bool{
 	"id": true, "url": true, "uri": true, "http": true, "https": true,
 	"api": true, "json": true, "xml": true, "sql": true, "uuid": true, "html": true,
-	"ip": true, "os": true,
+	"ip": true, "os": true, "ca": true, "xpc": true, "fqdn": true, "usb": true,
 }
 
 // goCustomCasing handles plural/mixed initialisms that aren't pure uppercase (e.g. "ids" → "IDs").
@@ -145,18 +145,11 @@ func resolveGoType(t *ast.Type, schema *ast.Schema, scalars map[string]string, n
 }
 
 // resolveInputGoType maps a GraphQL type to its Go equivalent for input struct fields.
-// Nullable InputObject fields are emitted as pointer types.
 func resolveInputGoType(t *ast.Type, schema *ast.Schema, scalars map[string]string) string {
 	if t.Elem != nil {
 		return "[]" + resolveInputNamedGoType(t.Elem.NamedType, schema, scalars)
 	}
-	goType := resolveInputNamedGoType(t.NamedType, schema, scalars)
-	if !t.NonNull {
-		if def := schema.Types[t.NamedType]; def != nil && def.Kind == ast.InputObject {
-			return "*" + goType
-		}
-	}
-	return goType
+	return resolveInputNamedGoType(t.NamedType, schema, scalars)
 }
 
 func resolveNamedGoType(name string, schema *ast.Schema, scalars map[string]string, nestedOverrides map[string]string) string {

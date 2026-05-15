@@ -138,7 +138,7 @@ func TestResolveInputGoType(t *testing.T) {
 		fieldType *ast.Type
 		want      string
 	}{
-		{"nullable InputObject → pointer", &ast.Type{NamedType: "Order"}, "*Order"},
+		{"nullable InputObject → value", &ast.Type{NamedType: "Order"}, "Order"},
 		{"nonnull InputObject → value", &ast.Type{NamedType: "Order", NonNull: true}, "Order"},
 		{"list of String", &ast.Type{Elem: &ast.Type{NamedType: "String"}}, "[]string"},
 	}

@@ -1230,6 +1230,170 @@
           ]
         }
       ]
+    },
+    {
+      "file": "action_configuration.go",
+      "typeName": "ActionConfig",
+      "gqlTypeName": "ActionConfigs",
+      "fields": ["id", "name", "description", "hash", "created", "updated", "alertConfig", "clients", "plans"],
+      "nestedTypes": [
+        {"schemaName": "ActionConfigsAlertConfig", "goName": "AlertConfig", "nullableFields": ["data"]},
+        {"schemaName": "AlertDataConfigs", "goName": "AlertData", "nullableFields": ["binary","clickEvent","downloadEvent","file","fsEvent","group","procEvent","process","screenshotEvent","usbEvent","user","gkEvent","keylogRegisterEvent","mrtEvent"]},
+        {"schemaName": "AlertDataConfig", "goName": "AlertEventType"},
+        {"schemaName": "ReportClient", "goName": "ReportClient", "nullableFields": ["batchConfig"]},
+        {"schemaName": "HttpHeader", "goName": "ReportClientHeader"},
+        {"schemaName": "Plan", "goName": "ActionConfigPlan", "fields": ["id", "name"], "path": "plans"}
+      ],
+      "nullableResponseFields": ["alertConfig"],
+      "mapInputFields": {"alertConfig": "map[string]any", "clients": "[]map[string]any"},
+      "unionFields": {
+        "params": {
+          "common": [],
+          "variants": {
+            "HttpClientParams": ["headers", "method", "url"],
+            "JamfCloudClientParams": ["destinationFilter"],
+            "KafkaClientParams": ["host", "port", "topic", "clientCN", "serverCN"],
+            "LogFileClientParams": ["path", "permissions", "maxSizeMB", "ownership", "backups"],
+            "SyslogClientParams": ["host", "port", "scheme"]
+          },
+          "goStruct": "ReportClientParams"
+        }
+      },
+      "extraResponseTypes": [
+        {"goName": "ActionConfigListItem", "schemaName": "ActionConfigs", "fields": ["id","name","description","created","updated"]}
+      ],
+      "operations": [
+        {
+          "name": "CreateActionConfig",
+          "gqlName": "createActionConfigs",
+          "kind": "create",
+          "endpoint": "/app",
+          "inputType": "ActionConfigsInput",
+          "inputTypeGoName": "ActionConfigInput"
+        },
+        {
+          "name": "GetActionConfig",
+          "gqlName": "getActionConfigs",
+          "kind": "get",
+          "endpoint": "/app"
+        },
+        {
+          "name": "UpdateActionConfig",
+          "gqlName": "updateActionConfigs",
+          "kind": "update",
+          "endpoint": "/app",
+          "inputType": "ActionConfigsInput",
+          "inputTypeGoName": "ActionConfigInput"
+        },
+        {
+          "name": "DeleteActionConfig",
+          "gqlName": "deleteActionConfigs",
+          "kind": "delete",
+          "endpoint": "/app"
+        },
+        {
+          "name": "ListActionConfigs",
+          "gqlName": "listActionConfigs",
+          "kind": "list",
+          "endpoint": "/app",
+          "returnType": "ActionConfigListItem",
+          "pagination": true,
+          "paginationVars": {"direction": "DESC", "field": "created", "pageSize": 100},
+          "listItemFields": ["id","name","description","created","updated"]
+        }
+      ]
+    },
+    {
+      "file": "plan.go",
+      "typeName": "Plan",
+      "fields": ["id","uuid","hash","name","description","created","updated","logLevel","profileVersion","autoUpdate","threatPreventionStrategy","customEngineConfig","commsConfig","infoSync","signaturesFeedConfig","actionConfigs","exceptionSets","usbControlSet","telemetry","telemetryV2","analyticSets"],
+      "nestedTypes": [
+        {"schemaName": "CommsConfig", "goName": "PlanCommsConfig"},
+        {"schemaName": "infoSync", "goName": "PlanInfoSync", "fields": ["attrs", "insightsSyncInterval"]},
+        {"schemaName": "SignaturesFeedConfig", "goName": "PlanSignaturesFeed"},
+        {"schemaName": "ExceptionSet", "goName": "PlanExceptionSet", "fields": ["uuid","name","managed"]},
+        {"schemaName": "ActionConfigs", "goName": "PlanRef", "fields": ["id","name"], "path": "actionConfigs"},
+        {"schemaName": "USBControlSet", "goName": "PlanRef", "fields": ["id","name"], "path": "usbControlSet"},
+        {"schemaName": "Telemetry", "goName": "PlanRef", "fields": ["id","name"], "path": "telemetry"},
+        {"schemaName": "TelemetryV2", "goName": "PlanRef", "fields": ["id","name"], "path": "telemetryV2"},
+        {"schemaName": "Analytic", "goName": "PlanAnalytic", "fields": ["uuid","categories"], "path": "analyticSets.analyticSet.analytics"},
+        {"schemaName": "AnalyticSet", "goName": "PlanAnalyticSetRef", "fields": ["uuid","name","managed","analytics"], "path": "analyticSets.analyticSet"}
+      ],
+      "inputTypeRenames": {
+        "CommsConfigInput": "PlanCommsConfigInput",
+        "InfoSyncInput": "PlanInfoSyncInput",
+        "SignaturesFeedConfigInput": "PlanSignaturesFeedConfigInput",
+        "ProfileOptionsInput": "PlanConfigProfileOptionsInput",
+        "ProfileTokenOptionsInput": "PlanConfigProfileTokenOptionsInput"
+      },
+      "inputFieldGoRenames": {
+        "ProfileTokenOptionsInput": {
+          "xpc": "XPC",
+          "keychain_client_id": "KeychainClientID"
+        }
+      },
+      "nullableInputFields": ["logLevel","telemetry","telemetryV2","usbControlSet","customEngineConfig","configVersion"],
+      "optionalInputFields": ["logLevel","exceptionSets","telemetry","telemetryV2","analyticSets","usbControlSet","threatPreventionStrategy","customEngineConfig","configVersion"],
+      "explicitNullInputFields": ["telemetryV2"],
+      "nullableNestedInputFields": {"InfoSyncInput": ["infoSyncInterval"]},
+      "operations": [
+        {
+          "name": "CreatePlan",
+          "gqlName": "createPlan",
+          "kind": "create",
+          "endpoint": "/app",
+          "inputType": "PlanInput",
+          "inputTypeGoName": "PlanInput",
+          "wrappedInput": true
+        },
+        {
+          "name": "GetPlan",
+          "gqlName": "getPlan",
+          "kind": "get",
+          "endpoint": "/app"
+        },
+        {
+          "name": "UpdatePlan",
+          "gqlName": "updatePlan",
+          "kind": "update",
+          "endpoint": "/app",
+          "inputType": "PlanInput",
+          "inputTypeGoName": "PlanInput",
+          "wrappedInput": true
+        },
+        {
+          "name": "DeletePlan",
+          "gqlName": "deletePlan",
+          "kind": "delete",
+          "endpoint": "/app"
+        },
+        {
+          "name": "ListPlans",
+          "gqlName": "listPlans",
+          "kind": "list",
+          "endpoint": "/app",
+          "pagination": true,
+          "paginationVars": {"direction": "ASC", "field": "created", "pageSize": 100, "filter": null}
+        },
+        {
+          "name": "GetPlansConfigProfile",
+          "gqlName": "getPlansConfigProfile",
+          "kind": "singleton_get",
+          "endpoint": "/app",
+          "resultKey": "getPlansConfigProfile",
+          "returnType": "string",
+          "returnNullable": false,
+          "inputType": "ProfileOptionsInput",
+          "inputTypeGoName": "PlanConfigProfileOptionsInput",
+          "wrappedInput": true,
+          "noSelection": true,
+          "noFragment": true,
+          "fieldArgs": "id: $id, input: $input",
+          "inlineArgs": [
+            {"name": "id", "goType": "string", "gqlVar": "id", "gqlType": "ID!"}
+          ]
+        }
+      ]
     }
   ],
   "statics": [
@@ -1256,14 +1420,6 @@
     {
       "source": "_static/types.go",
       "dest": "types.go"
-    },
-    {
-      "source": "_static/plan.go",
-      "dest": "plan.go"
-    },
-    {
-      "source": "_static/action_configuration.go",
-      "dest": "action_configuration.go"
     }
   ]
 }
