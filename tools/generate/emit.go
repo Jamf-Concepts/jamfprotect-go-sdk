@@ -15,6 +15,18 @@ import (
 //go:embed templates/resource.go.tmpl
 var resourceTmpl string
 
+func emitStatic(srcPath, dstPath string) error {
+	data, err := os.ReadFile(srcPath)
+	if err != nil {
+		return fmt.Errorf("read: %w", err)
+	}
+	formatted, err := format.Source(data)
+	if err != nil {
+		return fmt.Errorf("format %s: %w", srcPath, err)
+	}
+	return os.WriteFile(dstPath, formatted, 0644)
+}
+
 func emitFile(ir IRResource, outPath string) error {
 	tmpl, err := template.New("resource").Parse(resourceTmpl)
 	if err != nil {

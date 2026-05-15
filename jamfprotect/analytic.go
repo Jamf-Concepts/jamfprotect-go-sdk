@@ -303,8 +303,12 @@ func buildAnalyticVariables(input AnalyticInput) map[string]any {
 }
 
 func buildInternalAnalyticVariables(input InternalAnalyticInput) map[string]any {
-	return map[string]any{
-		"tenantActions":  input.TenantActions,
-		"tenantSeverity": input.TenantSeverity,
+	vars := map[string]any{}
+	if input.TenantActions != nil {
+		vars["tenantActions"] = input.TenantActions
 	}
+	if input.TenantSeverity != "" {
+		vars["tenantSeverity"] = input.TenantSeverity
+	}
+	return vars
 }
