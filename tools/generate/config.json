@@ -892,6 +892,78 @@
       ]
     },
     {
+      "file": "insight.go",
+      "typeName": "Insight",
+      "idField": "uuid",
+      "fields": ["uuid", "label", "description", "section", "totalPass", "totalFail", "totalNone", "tags", "enabled", "cisid"],
+      "nestedTypes": [
+        {
+          "schemaName": "CisId",
+          "goName": "InsightCisID"
+        }
+      ],
+      "extraResponseTypes": [
+        {
+          "goName": "InsightComputer",
+          "schemaName": "Computer",
+          "fields": ["uuid", "hostName", "insightsUpdated", "insightsStatsFail", "insightsStatsPass", "insightsStatsUnknown"]
+        },
+        {
+          "goName": "ComplianceBaselineScore",
+          "schemaName": "ComplianceBaselineScore"
+        }
+      ],
+      "operations": [
+        {
+          "name": "ListInsights",
+          "gqlName": "listInsights",
+          "kind": "list_simple",
+          "endpoint": "/app",
+          "resultKey": "listInsights"
+        },
+        {
+          "name": "UpdateInsightStatus",
+          "gqlName": "updateInsightStatus",
+          "kind": "update_inline",
+          "endpoint": "/app",
+          "resultKey": "updateInsightStatus",
+          "inputType": "InsightInput",
+          "inlineArgs": [
+            {"name": "uuid", "goType": "string", "gqlVar": "uuid", "gqlType": "ID!", "isId": true},
+            {"name": "enabled", "goType": "bool", "gqlVar": "enabled", "gqlType": "Boolean!"}
+          ]
+        },
+        {
+          "name": "ListInsightComputers",
+          "gqlName": "listInsightComputers",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listInsightComputers",
+          "returnType": "InsightComputer",
+          "pagination": true,
+          "paginationVars": {"pageSize": 100, "filter": null, "order": null},
+          "listItemFields": ["uuid", "hostName", "insightsUpdated", "insightsStatsFail", "insightsStatsPass", "insightsStatsUnknown"],
+          "topLevelArgs": [
+            {"name": "uuid", "goType": "string", "gqlVar": "uuid", "gqlType": "ID!"}
+          ]
+        },
+        {
+          "name": "GetFleetComplianceScore",
+          "gqlName": "getFleetComplianceBaselineScore",
+          "kind": "singleton_get",
+          "endpoint": "/app",
+          "resultKey": "getFleetComplianceBaselineScore",
+          "returnType": "ComplianceBaselineScore",
+          "inlineArgs": [
+            {"name": "date", "goType": "string", "gqlVar": "date", "gqlType": "AWSDate", "isOptional": true}
+          ],
+          "fieldArgs": "date: $date",
+          "noFragment": true,
+          "inlineFields": ["updated", "score"]
+        }
+      ]
+    },
+    {
       "file": "audit_log.go",
       "typeName": "AuditLog",
       "fields": ["resourceId", "date", "args", "error", "ips", "op", "user"],

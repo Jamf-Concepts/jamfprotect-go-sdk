@@ -943,21 +943,33 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		if opResultKey != gqlName {
 			fieldRef = opResultKey + ": " + gqlName
 		}
-		varDecls := ""
+		var allVarDecls []string
 		if extraDecls != "" {
-			varDecls = "(" + extraDecls + ")"
+			allVarDecls = append(allVarDecls, extraDecls)
+		}
+		for _, a := range op.InlineArgs {
+			allVarDecls = append(allVarDecls, "$"+a.GQLVar+": "+a.GQLType)
+		}
+		varDecls := ""
+		if len(allVarDecls) > 0 {
+			varDecls = "(" + strings.Join(allVarDecls, ", ") + ")"
+		}
+		// fieldRef may include field args (e.g. getFleetComplianceBaselineScore(date: $date)).
+		fieldCallRef := fieldRef
+		if op.FieldArgs != "" {
+			fieldCallRef = fieldRef + "(" + op.FieldArgs + ")"
 		}
 		// Wrap nested-result paths around the bodySelection.
-		body := wrapResultPath(op.ResultPath, gqlName, bodySelection)
+		body := wrapResultPath(op.ResultPath, fieldCallRef, bodySelection)
 		// If ResultPath wasn't given, default to single-level wrap with fieldRef.
 		if op.ResultPath == "" {
-			body = fmt.Sprintf("%s {\n\t\t%s\n\t}", fieldRef, bodySelection)
+			body = fmt.Sprintf("%s {\n\t\t%s\n\t}", fieldCallRef, bodySelection)
 		}
 		return fmt.Sprintf("\nquery %s%s {\n\t%s\n}\n", gqlName, varDecls, body), nil
 
 	case "list":
 		if op.Pagination {
-			return buildPaginatedListStr(schema, gqlName, fragRef, op.PaginationVars, extraDecls, op.ListItemFields)
+			return buildPaginatedListStr(schema, gqlName, fragRef, op.PaginationVars, extraDecls, op.ListItemFields, op.TopLevelArgs)
 		}
 		return buildSimpleListStr(gqlName, fragRef), nil
 
@@ -1159,7 +1171,7 @@ func buildUpdateStr(schema *ast.Schema, inputTypeName, gqlName, fragRef, idField
 	return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(\n\t\t%s: $%s\n\t\tinput: %s\n\t) {\n\t\t%s\n\t}\n}\n", gqlName, vars, gqlName, idField, idField, input, fragRef), nil
 }
 
-func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginationVars map[string]any, extraDecls string, listItemFields []string) (string, error) {
+func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginationVars map[string]any, extraDecls string, listItemFields []string, topLevelArgs []TopLevelArg) (string, error) {
 	queryDef := schema.Query.Fields.ForName(gqlName)
 	if queryDef == nil {
 		return "", fmt.Errorf("query %q not found in schema", gqlName)
@@ -1169,10 +1181,12 @@ func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginati
 		return "", fmt.Errorf("query %q has no 'input' argument", gqlName)
 	}
 	inputTypeName := inputArg.Type.NamedType
-	// Fields whose paginationVars value is a map are passed as opaque object variables.
+	// Fields whose paginationVars value is a map or null are passed as opaque object variables.
 	opaqueFields := make(map[string]bool)
 	for k, v := range paginationVars {
-		if _, ok := v.(map[string]interface{}); ok {
+		if v == nil {
+			opaqueFields[k] = true
+		} else if _, ok := v.(map[string]interface{}); ok {
 			opaqueFields[k] = true
 		}
 	}
@@ -1181,7 +1195,10 @@ func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginati
 		return "", err
 	}
 	leaves := leafVars(nodes)
-	varDecls := make([]string, 0, len(leaves))
+	varDecls := make([]string, 0, len(leaves)+len(topLevelArgs))
+	for _, a := range topLevelArgs {
+		varDecls = append(varDecls, "$"+a.GQLVar+": "+a.GQLType)
+	}
 	for _, leaf := range leaves {
 		varDecls = append(varDecls, "$"+leaf.VarName+": "+leaf.TypeStr)
 	}
@@ -1194,9 +1211,13 @@ func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginati
 	if len(listItemFields) > 0 {
 		itemsContent = strings.Join(listItemFields, "\n\t\t\t")
 	}
+	topArgStr := ""
+	for _, a := range topLevelArgs {
+		topArgStr += a.GQLVar + ": $" + a.GQLVar + "\n\t\t"
+	}
 	return fmt.Sprintf(
-		"\nquery %s(%s) {\n\t%s(\n\t\tinput: %s\n\t) {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t\tpageInfo {\n\t\t\tnext\n\t\t\ttotal\n\t\t}\n\t}\n}\n",
-		gqlName, allDecls, gqlName, constructor, itemsContent,
+		"\nquery %s(%s) {\n\t%s(\n\t\t%sinput: %s\n\t) {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t\tpageInfo {\n\t\t\tnext\n\t\t\ttotal\n\t\t}\n\t}\n}\n",
+		gqlName, allDecls, gqlName, topArgStr, constructor, itemsContent,
 	), nil
 }
 
@@ -1241,15 +1262,28 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		if op.ReturnIsList {
 			retTypeExpr = "[]" + returnType
 		}
-		sig = fmt.Sprintf("(ctx context.Context) (%s, error)", retTypeExpr)
+		if len(op.InlineArgs) > 0 {
+			sigStr, _ := inlineArgsSignature(op.InlineArgs)
+			sig = fmt.Sprintf("(ctx context.Context%s) (%s, error)", sigStr, retTypeExpr)
+		} else {
+			sig = fmt.Sprintf("(ctx context.Context) (%s, error)", retTypeExpr)
+		}
 		doc = fmt.Sprintf("// %s retrieves the %s.", op.Name, lcFirst(returnType))
-		body = buildSingletonGetBody(op.Name, returnType, resultKey, endpoint, constName, op.ResultPath, op.ResultPathTypes, extraVarValues, rbacMap, op.ReturnIsList)
+		body = buildSingletonGetBody(op.Name, returnType, resultKey, endpoint, constName, op.ResultPath, op.ResultPathTypes, extraVarValues, rbacMap, op.ReturnIsList, op.InlineArgs)
 
 	case "list":
-		sig = fmt.Sprintf("(ctx context.Context) ([]%s, error)", returnType)
+		if len(op.TopLevelArgs) > 0 {
+			var argParts []string
+			for _, a := range op.TopLevelArgs {
+				argParts = append(argParts, ", "+a.Name+" "+a.GoType)
+			}
+			sig = fmt.Sprintf("(ctx context.Context%s) ([]%s, error)", strings.Join(argParts, ""), returnType)
+		} else {
+			sig = fmt.Sprintf("(ctx context.Context) ([]%s, error)", returnType)
+		}
 		doc = fmt.Sprintf("// %s retrieves all %ss.", op.Name, lcFirst(returnType))
 		if op.Pagination {
-			body, err = buildListPaginatedBody(op.Name, returnType, resultKey, endpoint, constName, op.PaginationVars, rbacMap)
+			body, err = buildListPaginatedBody(op.Name, returnType, resultKey, endpoint, constName, op.PaginationVars, rbacMap, op.TopLevelArgs)
 		} else {
 			body = buildListSimpleBody(op.Name, returnType, resultKey, endpoint, constName)
 		}
@@ -1345,10 +1379,43 @@ func mergeVarsExpr(baseLit, extraVarLit, rbacMap string) string {
 	return "vars := mergeVars(" + strings.Join(args, ", ") + ")"
 }
 
-func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constName, resultPath string, resultPathTypes []string, extraVarValues map[string]any, rbacMap string, returnIsList bool) string {
+func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constName, resultPath string, resultPathTypes []string, extraVarValues map[string]any, rbacMap string, returnIsList bool, inlineArgs []InlineArg) string {
 	varsArg := "nil"
 	varAssignPrefix := ""
-	if len(extraVarValues) > 0 || rbacMap != "" {
+	if len(inlineArgs) > 0 {
+		// Build conditional or unconditional vars from inline args.
+		var sb strings.Builder
+		allOptional := true
+		for _, a := range inlineArgs {
+			if !a.IsOptional {
+				allOptional = false
+				break
+			}
+		}
+		if allOptional && len(inlineArgs) == 1 {
+			// Single optional arg: var vars map[string]any; if arg != zero { vars = map[string]any{...} }
+			a := inlineArgs[0]
+			zeroCheck := a.Name + ` != ""`
+			if a.GoType == "bool" {
+				zeroCheck = a.Name
+			} else if strings.HasPrefix(a.GoType, "*") || strings.HasPrefix(a.GoType, "[]") {
+				zeroCheck = a.Name + " != nil"
+			}
+			fmt.Fprintf(&sb, "var vars map[string]any\n\tif %s {\n\t\tvars = map[string]any{%q: %s}\n\t}\n\t", zeroCheck, a.GQLVar, a.Name)
+		} else {
+			// All required or multiple args: build static map.
+			sb.WriteString("vars := map[string]any{")
+			for i, a := range inlineArgs {
+				if i > 0 {
+					sb.WriteString(", ")
+				}
+				fmt.Fprintf(&sb, "%q: %s", a.GQLVar, a.Name)
+			}
+			sb.WriteString("}\n\t")
+		}
+		varAssignPrefix = sb.String()
+		varsArg = "vars"
+	} else if len(extraVarValues) > 0 || rbacMap != "" {
 		var baseLit string
 		if len(extraVarValues) > 0 {
 			baseLit = buildMapLit(extraVarValues)
@@ -1570,7 +1637,7 @@ func buildDeleteBody(methodName, endpoint, constName, idField string) string {
 		idField, idField, endpoint, constName, methodName, idField)
 }
 
-func buildListPaginatedBody(methodName, returnType, resultKey, endpoint, constName string, paginationVars map[string]any, rbacMap string) (string, error) {
+func buildListPaginatedBody(methodName, returnType, resultKey, endpoint, constName string, paginationVars map[string]any, rbacMap string, topLevelArgs []TopLevelArg) (string, error) {
 	localVar := lcFirst(returnType) + "s"
 	keys := make([]string, 0, len(paginationVars))
 	for k := range paginationVars {
@@ -1582,6 +1649,11 @@ func buildListPaginatedBody(methodName, returnType, resultKey, endpoint, constNa
 		val := formatGoLiteral(paginationVars[k])
 		varEntries = append(varEntries, fmt.Sprintf("\t\t%q: %s,", k, val))
 	}
+	// Top-level args are added to the vars map by name so they're forwarded to client.ListAll.
+	for _, a := range topLevelArgs {
+		varEntries = append(varEntries, fmt.Sprintf("\t\t%q: %s,", a.GQLVar, a.Name))
+	}
+	sort.Strings(varEntries)
 	varsStr := strings.Join(varEntries, "\n")
 	paginationMapLit := fmt.Sprintf("map[string]any{\n%s\n\t}", varsStr)
 	var varsExpr string
@@ -1590,10 +1662,17 @@ func buildListPaginatedBody(methodName, returnType, resultKey, endpoint, constNa
 	} else {
 		varsExpr = paginationMapLit
 	}
+	var errCall string
+	if len(topLevelArgs) > 0 {
+		errCall = fmt.Sprintf(`fmt.Errorf("%s(%%s): %%w", %s, err)`, methodName, topLevelArgs[0].Name)
+	} else {
+		errCall = fmt.Sprintf(`fmt.Errorf("%s: %%w", err)`, methodName)
+	}
 	return fmt.Sprintf(
-		"%s, err := client.ListAll[%s](ctx, c.transport, %q, %s, %s, %q)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn %s, nil",
-		localVar, returnType, endpoint, constName, varsExpr, resultKey, methodName, localVar), nil
+		"%s, err := client.ListAll[%s](ctx, c.transport, %q, %s, %s, %q)\n\tif err != nil {\n\t\treturn nil, %s\n\t}\n\treturn %s, nil",
+		localVar, returnType, endpoint, constName, varsExpr, resultKey, errCall, localVar), nil
 }
+
 
 func buildListSimpleBody(methodName, returnType, resultKey, endpoint, constName string) string {
 	localVar := lcFirst(returnType) + "s"
@@ -1623,6 +1702,9 @@ func primitiveZeroExpr(t string) string {
 }
 
 func formatGoLiteral(v any) string {
+	if v == nil {
+		return "nil"
+	}
 	switch val := v.(type) {
 	case float64:
 		if val == float64(int64(val)) {
