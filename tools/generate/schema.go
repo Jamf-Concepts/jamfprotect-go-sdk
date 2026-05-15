@@ -37,7 +37,7 @@ func loadSchema(path string) (*ast.Schema, error) {
 		&ast.Source{Name: path, Input: string(data)},
 	)
 	if parseErr != nil {
-		return nil, fmt.Errorf("parse schema: %v", parseErr)
+		return nil, fmt.Errorf("parse schema: %w", parseErr)
 	}
 	return schema, nil
 }
