@@ -1102,6 +1102,18 @@
     {
       "source": "_static/data_forwarding.go",
       "dest": "data_forwarding.go"
+    },
+    {
+      "source": "_static/plan.go",
+      "dest": "plan.go"
+    },
+    {
+      "source": "_static/action_configuration.go",
+      "dest": "action_configuration.go"
+    },
+    {
+      "source": "_static/removable_storage_control_set.go",
+      "dest": "removable_storage_control_set.go"
     }
   ]
 }
