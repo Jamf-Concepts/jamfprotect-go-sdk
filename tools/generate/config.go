@@ -27,18 +27,18 @@ type StaticEmitConfig struct {
 
 // ResourceConfig defines one resource file to generate.
 type ResourceConfig struct {
-	File                     string              `json:"file"`
-	TypeName                 string              `json:"typeName"`              // Go type name
-	GQLTypeName              string              `json:"gqlTypeName,omitempty"` // schema type name when it differs from TypeName
-	IDField                  string              `json:"idField,omitempty"`     // primary key field; defaults to "id"
-	Fields                   []string            `json:"fields"`
-	InputFields              []string            `json:"inputFields,omitempty"` // override which schema input fields to include; defaults to all
-	NestedTypes              []NestedTypeConfig  `json:"nestedTypes,omitempty"`
-	Operations               []OperationConfig   `json:"operations"`
-	DirectiveFields          map[string]string   `json:"directiveFields,omitempty"`          // fieldName → GQL directive string (e.g. "@include(if: $RBAC_Plan)")
-	ExtraVars                map[string]string   `json:"extraVars,omitempty"`                // extra GQL var declarations added to non-delete operation signatures
-	ExtraVarValues           map[string]any      `json:"extraVarValues,omitempty"`           // static var values merged into get/create/update method bodies
-	RBACMap                  string              `json:"rbacMap,omitempty"`                  // package-level RBAC map name passed to mergeVars in method bodies
+	File                      string                       `json:"file"`
+	TypeName                  string                       `json:"typeName"`              // Go type name
+	GQLTypeName               string                       `json:"gqlTypeName,omitempty"` // schema type name when it differs from TypeName
+	IDField                   string                       `json:"idField,omitempty"`     // primary key field; defaults to "id"
+	Fields                    []string                     `json:"fields"`
+	InputFields               []string                     `json:"inputFields,omitempty"` // override which schema input fields to include; defaults to all
+	NestedTypes               []NestedTypeConfig           `json:"nestedTypes,omitempty"`
+	Operations                []OperationConfig            `json:"operations"`
+	DirectiveFields           map[string]string            `json:"directiveFields,omitempty"`           // fieldName → GQL directive string (e.g. "@include(if: $RBAC_Plan)")
+	ExtraVars                 map[string]string            `json:"extraVars,omitempty"`                 // extra GQL var declarations added to non-delete operation signatures
+	ExtraVarValues            map[string]any               `json:"extraVarValues,omitempty"`            // static var values merged into get/create/update method bodies
+	RBACMap                   string                       `json:"rbacMap,omitempty"`                   // package-level RBAC map name passed to mergeVars in method bodies
 	NullableInputFields       []string                     `json:"nullableInputFields,omitempty"`       // input fields that should use pointer types despite being scalars
 	OptionalInputFields       []string                     `json:"optionalInputFields,omitempty"`       // input fields omitted from buildVars when zero/nil (conditional inclusion)
 	ExplicitNullInputFields   []string                     `json:"explicitNullInputFields,omitempty"`   // input fields needing three-state null/omit/set; emits a matching FooNull bool sentinel
@@ -46,12 +46,12 @@ type ResourceConfig struct {
 	InputFieldGoRenames       map[string]map[string]string `json:"inputFieldGoRenames,omitempty"`       // schema InputObject name → (schema field name → Go field name override)
 	NullableNestedInputFields map[string][]string          `json:"nullableNestedInputFields,omitempty"` // schema InputObject name → field names that should use *T + omitempty
 	MapInputFields            map[string]string            `json:"mapInputFields,omitempty"`            // top-level input field name → opaque Go type (e.g. "map[string]any"); skips nested type recursion
-	UnionFields              map[string]UnionFieldConfig `json:"unionFields,omitempty"`      // fieldName → union/interface field expansion config
-	ExtraResponseTypes       []ExtraResponseType `json:"extraResponseTypes,omitempty"`       // additional Go response types not tied to a field (e.g. list-item types)
-	NullableResponseFields   []string            `json:"nullableResponseFields,omitempty"`   // top-level response fields that should use pointer types even for scalars
-	TypedEnums               []TypedEnumConfig   `json:"typedEnums,omitempty"`               // typed Go enum aliases with named constants
-	IsList                   bool                `json:"isList,omitempty"`                   // generate a [TypeName] return at the main type fragment ref level
-	ExtraTopLevel            string              `json:"extraTopLevel,omitempty"`            // verbatim Go code appended after the main type definition (for one-off helpers)
+	UnionFields               map[string]UnionFieldConfig  `json:"unionFields,omitempty"`               // fieldName → union/interface field expansion config
+	ExtraResponseTypes        []ExtraResponseType          `json:"extraResponseTypes,omitempty"`        // additional Go response types not tied to a field (e.g. list-item types)
+	NullableResponseFields    []string                     `json:"nullableResponseFields,omitempty"`    // top-level response fields that should use pointer types even for scalars
+	TypedEnums                []TypedEnumConfig            `json:"typedEnums,omitempty"`                // typed Go enum aliases with named constants
+	IsList                    bool                         `json:"isList,omitempty"`                    // generate a [TypeName] return at the main type fragment ref level
+	ExtraTopLevel             string                       `json:"extraTopLevel,omitempty"`             // verbatim Go code appended after the main type definition (for one-off helpers)
 }
 
 // TypedEnumConfig declares a Go typed string alias with named constants for a schema enum.
@@ -98,35 +98,35 @@ type NestedTypeConfig struct {
 
 // OperationConfig defines one GraphQL operation on a resource.
 type OperationConfig struct {
-	Name              string              `json:"name"`
-	GQLName           string              `json:"gqlName,omitempty"`
-	Kind              string              `json:"kind,omitempty"`
-	Endpoint          string              `json:"endpoint,omitempty"`
-	InputType         string              `json:"inputType,omitempty"`
-	InputTypeGoName   string              `json:"inputTypeGoName,omitempty"`   // Go struct name when it differs from InputType
-	RBAC              string              `json:"rbac,omitempty"`
-	Pagination        bool                `json:"pagination,omitempty"`
-	PaginationVars    map[string]any      `json:"paginationVars,omitempty"`
-	ReturnType        string              `json:"returnType,omitempty"`
-	ReturnNullable    *bool               `json:"returnNullable,omitempty"`
-	ResultKey         string              `json:"resultKey,omitempty"`
-	WrappedInput      bool                `json:"wrappedInput,omitempty"`      // use $input: TypeName! single var instead of expanding fields
-	InputFields       []string            `json:"inputFields,omitempty"`       // per-op override for which schema input fields appear in the mutation
-	ListItemFields    []string            `json:"listItemFields,omitempty"`    // inline fields for list items instead of the fragment (for minimal list queries)
-	InlineArgs        []InlineArg         `json:"inlineArgs,omitempty"`        // primitive Go args for singleton_update / inline ops (no struct input)
-	GroupInputAs      string              `json:"groupInputAs,omitempty"`      // bundle inlineArgs into a named Go struct for the method signature
+	Name               string              `json:"name"`
+	GQLName            string              `json:"gqlName,omitempty"`
+	Kind               string              `json:"kind,omitempty"`
+	Endpoint           string              `json:"endpoint,omitempty"`
+	InputType          string              `json:"inputType,omitempty"`
+	InputTypeGoName    string              `json:"inputTypeGoName,omitempty"` // Go struct name when it differs from InputType
+	RBAC               string              `json:"rbac,omitempty"`
+	Pagination         bool                `json:"pagination,omitempty"`
+	PaginationVars     map[string]any      `json:"paginationVars,omitempty"`
+	ReturnType         string              `json:"returnType,omitempty"`
+	ReturnNullable     *bool               `json:"returnNullable,omitempty"`
+	ResultKey          string              `json:"resultKey,omitempty"`
+	WrappedInput       bool                `json:"wrappedInput,omitempty"`       // use $input: TypeName! single var instead of expanding fields
+	InputFields        []string            `json:"inputFields,omitempty"`        // per-op override for which schema input fields appear in the mutation
+	ListItemFields     []string            `json:"listItemFields,omitempty"`     // inline fields for list items instead of the fragment (for minimal list queries)
+	InlineArgs         []InlineArg         `json:"inlineArgs,omitempty"`         // primitive Go args for singleton_update / inline ops (no struct input)
+	GroupInputAs       string              `json:"groupInputAs,omitempty"`       // bundle inlineArgs into a named Go struct for the method signature
 	MultiWrappedInputs []MultiWrappedInput `json:"multiWrappedInputs,omitempty"` // typed GQL vars for multi_wrapped_update ops
-	ResultPath        string              `json:"resultPath,omitempty"`        // dot-path for nested-result extraction (e.g. "getAppInitializationData.betaAcceptanceStatus")
-	ResultPathTypes   []string            `json:"resultPathTypes,omitempty"`   // optional Go type names for each intermediate level in ResultPath
-	GQLReturnType     string              `json:"gqlReturnType,omitempty"`     // when the op's GQL return type differs from the resource's main schema type
-	InlineFields      []string            `json:"inlineFields,omitempty"`      // inline scalar fields used instead of fragment ref (per-op subset)
-	ExtraVarValues    map[string]any      `json:"extraVarValues,omitempty"`    // per-op extra var values merged into method body
-	NoFragment        bool                `json:"noFragment,omitempty"`        // suppress fragment append (for ops with custom return shape)
-	DateRangeArg      string              `json:"dateRangeArg,omitempty"`      // for date_paginated: Go arg name (e.g. "dateRange") of type *NameDateRange
-	ReturnIsList      bool                `json:"returnIsList,omitempty"`      // when true, the op returns []ReturnType instead of ReturnType (for singleton_get/singleton_update on list-shaped results)
-	TopLevelArgs      []TopLevelArg       `json:"topLevelArgs,omitempty"`      // extra GQL args forwarded as top-level field args alongside input (e.g. uuid in listInsightComputers)
-	FieldArgs         string              `json:"fieldArgs,omitempty"`         // verbatim GQL field argument string appended to the field call (e.g. "date: $date")
-	NoSelection       bool                `json:"noSelection,omitempty"`       // suppress { ... } selection set (for scalar-return singleton_get, e.g. String return)
+	ResultPath         string              `json:"resultPath,omitempty"`         // dot-path for nested-result extraction (e.g. "getAppInitializationData.betaAcceptanceStatus")
+	ResultPathTypes    []string            `json:"resultPathTypes,omitempty"`    // optional Go type names for each intermediate level in ResultPath
+	GQLReturnType      string              `json:"gqlReturnType,omitempty"`      // when the op's GQL return type differs from the resource's main schema type
+	InlineFields       []string            `json:"inlineFields,omitempty"`       // inline scalar fields used instead of fragment ref (per-op subset)
+	ExtraVarValues     map[string]any      `json:"extraVarValues,omitempty"`     // per-op extra var values merged into method body
+	NoFragment         bool                `json:"noFragment,omitempty"`         // suppress fragment append (for ops with custom return shape)
+	DateRangeArg       string              `json:"dateRangeArg,omitempty"`       // for date_paginated: Go arg name (e.g. "dateRange") of type *NameDateRange
+	ReturnIsList       bool                `json:"returnIsList,omitempty"`       // when true, the op returns []ReturnType instead of ReturnType (for singleton_get/singleton_update on list-shaped results)
+	TopLevelArgs       []TopLevelArg       `json:"topLevelArgs,omitempty"`       // extra GQL args forwarded as top-level field args alongside input (e.g. uuid in listInsightComputers)
+	FieldArgs          string              `json:"fieldArgs,omitempty"`          // verbatim GQL field argument string appended to the field call (e.g. "date: $date")
+	NoSelection        bool                `json:"noSelection,omitempty"`        // suppress { ... } selection set (for scalar-return singleton_get, e.g. String return)
 }
 
 // MultiWrappedInput declares one typed GraphQL input variable for a multi_wrapped_update mutation.
@@ -139,13 +139,13 @@ type MultiWrappedInput struct {
 
 // InlineArg is a primitive Go argument for singleton_update or inline-arg operations.
 type InlineArg struct {
-	Name       string `json:"name"`                  // Go arg name (camelCase)
-	GoType     string `json:"goType"`                // Go type (e.g. "bool", "string")
-	GQLVar     string `json:"gqlVar"`                // GQL variable name (e.g. "configFreeze")
-	GQLType    string `json:"gqlType"`               // GQL type declaration (e.g. "Boolean!")
-	InputPath  string `json:"inputPath,omitempty"`   // dot-path in the input literal where this var maps (e.g. "retention.database.log.numberOfDays")
-	IsID       bool   `json:"isId,omitempty"`        // true if this is the resource ID arg (not wrapped in input)
-	IsOptional bool   `json:"isOptional,omitempty"`  // when true, only include var when non-zero/non-nil
+	Name       string `json:"name"`                 // Go arg name (camelCase)
+	GoType     string `json:"goType"`               // Go type (e.g. "bool", "string")
+	GQLVar     string `json:"gqlVar"`               // GQL variable name (e.g. "configFreeze")
+	GQLType    string `json:"gqlType"`              // GQL type declaration (e.g. "Boolean!")
+	InputPath  string `json:"inputPath,omitempty"`  // dot-path in the input literal where this var maps (e.g. "retention.database.log.numberOfDays")
+	IsID       bool   `json:"isId,omitempty"`       // true if this is the resource ID arg (not wrapped in input)
+	IsOptional bool   `json:"isOptional,omitempty"` // when true, only include var when non-zero/non-nil
 }
 
 // TopLevelArg is a primitive Go argument forwarded as both a GQL top-level var and a field arg
