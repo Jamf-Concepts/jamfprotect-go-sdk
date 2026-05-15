@@ -1148,6 +1148,88 @@
           }
         }
       ]
+    },
+    {
+      "file": "data_retention.go",
+      "typeName": "DataRetentionSettings",
+      "gqlTypeName": "Retention",
+      "fields": ["database", "cold", "updated"],
+      "nestedTypes": [
+        {"schemaName": "DbStorageRetention", "goName": "DataRetentionDatabase"},
+        {"schemaName": "RecordCount", "goName": "DataRetentionDays"},
+        {"schemaName": "ColdStorageRetention", "goName": "DataRetentionCold", "fields": ["alert"]},
+        {"schemaName": "ColdStorageSettings", "goName": "DataRetentionColdDays"}
+      ],
+      "operations": [
+        {
+          "name": "GetDataRetention",
+          "gqlName": "getOrganization",
+          "kind": "singleton_get",
+          "endpoint": "/app",
+          "resultPath": "getOrganization.retention",
+          "returnType": "DataRetentionSettings"
+        },
+        {
+          "name": "UpdateDataRetention",
+          "gqlName": "updateOrganizationRetention",
+          "kind": "singleton_update",
+          "endpoint": "/app",
+          "resultPath": "updateOrganizationRetention.retention",
+          "returnType": "DataRetentionSettings",
+          "groupInputAs": "DataRetentionInput",
+          "inlineArgs": [
+            {"name": "databaseLogDays", "goType": "int64", "gqlVar": "databaseLogDays", "gqlType": "Int!", "inputPath": "retention.database.log.numberOfDays"},
+            {"name": "databaseAlertDays", "goType": "int64", "gqlVar": "databaseAlertDays", "gqlType": "Int!", "inputPath": "retention.database.alert.numberOfDays"},
+            {"name": "coldAlertDays", "goType": "int64", "gqlVar": "coldAlertDays", "gqlType": "Int!", "inputPath": "retention.cold.alert.numberOfDays"}
+          ]
+        }
+      ]
+    },
+    {
+      "file": "data_forwarding.go",
+      "typeName": "DataForwardingResult",
+      "gqlTypeName": "Organization",
+      "fields": ["uuid", "forward"],
+      "nestedTypes": [
+        {"schemaName": "Forward", "goName": "DataForwardingSettings"},
+        {"schemaName": "ForwardS3", "goName": "ForwardS3"},
+        {"schemaName": "ForwardSentinel", "goName": "ForwardSentinel"},
+        {"schemaName": "ForwardSentinelV2", "goName": "ForwardSentinelV2"},
+        {"schemaName": "DataStream", "goName": "DataStream", "nullableFields": ["dcrImmutableId", "streamName"]}
+      ],
+      "inputTypeRenames": {
+        "OrganizationS3ForwardInput": "ForwardS3Input",
+        "OrganizationSentinelForwardInput": "ForwardSentinelInput",
+        "OrganizationSentinelV2ForwardInput": "ForwardSentinelV2Input"
+      },
+      "nullableNestedInputFields": {
+        "DataStreamInput": ["dcrImmutableId", "streamName"],
+        "OrganizationSentinelV2ForwardInput": ["azureClientSecret"]
+      },
+      "operations": [
+        {
+          "name": "GetDataForwarding",
+          "gqlName": "getOrganization",
+          "kind": "singleton_get",
+          "endpoint": "/app",
+          "resultKey": "getOrganization",
+          "returnType": "DataForwardingResult"
+        },
+        {
+          "name": "UpdateDataForwarding",
+          "gqlName": "updateOrganizationForward",
+          "kind": "multi_wrapped_update",
+          "endpoint": "/app",
+          "resultKey": "updateOrganizationForward",
+          "returnType": "DataForwardingResult",
+          "inputTypeGoName": "DataForwardingInput",
+          "multiWrappedInputs": [
+            {"goField": "S3", "gqlVar": "s3", "schemaType": "OrganizationS3ForwardInput!", "goInputType": "ForwardS3Input"},
+            {"goField": "Sentinel", "gqlVar": "sentinel", "schemaType": "OrganizationSentinelForwardInput!", "goInputType": "ForwardSentinelInput"},
+            {"goField": "SentinelV2", "gqlVar": "sentinelV2", "schemaType": "OrganizationSentinelV2ForwardInput!", "goInputType": "ForwardSentinelV2Input"}
+          ]
+        }
+      ]
     }
   ],
   "statics": [
@@ -1174,14 +1256,6 @@
     {
       "source": "_static/types.go",
       "dest": "types.go"
-    },
-    {
-      "source": "_static/data_retention.go",
-      "dest": "data_retention.go"
-    },
-    {
-      "source": "_static/data_forwarding.go",
-      "dest": "data_forwarding.go"
     },
     {
       "source": "_static/plan.go",

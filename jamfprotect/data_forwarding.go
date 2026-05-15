@@ -10,121 +10,131 @@ import (
 	"fmt"
 )
 
-const dataForwardingGetQuery = `
-query getDataForward {
-  getOrganization {
-    ...DataForwardFields
-  }
-}
+// ── Query/Mutation constants ──────────────────────────────────────────────────
 
-fragment DataForwardFields on Organization {
-  uuid
-  forward {
-    s3 {
-      bucket
-      enabled
-      encrypted
-      prefix
-      role
-      cloudformation
-    }
-    sentinel {
-      enabled
-      customerId
-      sharedKey
-      logType
-      domain
-    }
-    sentinelV2 {
-      enabled
-      secretExists
-      azureTenantId
-      azureClientId
-      endpoint
-      alerts {
-        enabled
-        dcrImmutableId
-        streamName
-      }
-      ulogs {
-        enabled
-        dcrImmutableId
-        streamName
-      }
-      telemetries {
-        enabled
-        dcrImmutableId
-        streamName
-      }
-      telemetriesV2 {
-        enabled
-        dcrImmutableId
-        streamName
-      }
-    }
-  }
+const dataForwardingResultFields = `
+fragment DataForwardingResultFields on Organization {
+	uuid
+	forward {
+		s3 {
+			bucket
+			enabled
+			encrypted
+			prefix
+			role
+			cloudformation
+		}
+		sentinel {
+			enabled
+			customerId
+			sharedKey
+			logType
+			domain
+		}
+		sentinelV2 {
+			enabled
+			azureTenantId
+			azureClientId
+			secretExists
+			endpoint
+			alerts {
+				enabled
+				dcrImmutableId
+				streamName
+			}
+			ulogs {
+				enabled
+				dcrImmutableId
+				streamName
+			}
+			telemetries {
+				enabled
+				dcrImmutableId
+				streamName
+			}
+			telemetriesV2 {
+				enabled
+				dcrImmutableId
+				streamName
+			}
+		}
+	}
 }
 `
 
-const dataForwardingUpdateMutation = `
+const getDataForwardingQuery = `
+query getOrganization {
+	getOrganization {
+		...DataForwardingResultFields
+	}
+}
+` + dataForwardingResultFields
+
+const updateDataForwardingMutation = `
 mutation updateOrganizationForward($s3: OrganizationS3ForwardInput!, $sentinel: OrganizationSentinelForwardInput!, $sentinelV2: OrganizationSentinelV2ForwardInput!) {
-  updateOrganizationForward(
-    input: {s3: $s3, sentinel: $sentinel, sentinelV2: $sentinelV2}
-  ) {
-    ...DataForwardFields
-  }
+	updateOrganizationForward(input: {s3: $s3, sentinel: $sentinel, sentinelV2: $sentinelV2}) {
+		...DataForwardingResultFields
+	}
+}
+` + dataForwardingResultFields
+
+// ── Input types ───────────────────────────────────────────────────────────────
+
+// ForwardS3Input is a nested input type.
+type ForwardS3Input struct {
+	Enabled   bool   `json:"enabled"`
+	Bucket    string `json:"bucket"`
+	Encrypted bool   `json:"encrypted"`
+	Prefix    string `json:"prefix"`
+	Role      string `json:"role"`
 }
 
-fragment DataForwardFields on Organization {
-  uuid
-  forward {
-    s3 {
-      bucket
-      enabled
-      encrypted
-      prefix
-      role
-      cloudformation
-    }
-    sentinel {
-      enabled
-      customerId
-      sharedKey
-      logType
-      domain
-    }
-    sentinelV2 {
-      enabled
-      secretExists
-      azureTenantId
-      azureClientId
-      endpoint
-      alerts {
-        enabled
-        dcrImmutableId
-        streamName
-      }
-      ulogs {
-        enabled
-        dcrImmutableId
-        streamName
-      }
-      telemetries {
-        enabled
-        dcrImmutableId
-        streamName
-      }
-      telemetriesV2 {
-        enabled
-        dcrImmutableId
-        streamName
-      }
-    }
-  }
+// ForwardSentinelInput is a nested input type.
+type ForwardSentinelInput struct {
+	Enabled    bool   `json:"enabled"`
+	CustomerID string `json:"customerId"`
+	SharedKey  string `json:"sharedKey"`
+	LogType    string `json:"logType"`
+	Domain     string `json:"domain"`
 }
-`
 
-// ForwardS3 represents S3 forwarding settings.
+// DataStreamInput is a nested input type.
+type DataStreamInput struct {
+	Enabled        bool    `json:"enabled"`
+	DcrImmutableID *string `json:"dcrImmutableId,omitempty"`
+	StreamName     *string `json:"streamName,omitempty"`
+}
+
+// ForwardSentinelV2Input is a nested input type.
+type ForwardSentinelV2Input struct {
+	Enabled           bool            `json:"enabled"`
+	AzureTenantID     string          `json:"azureTenantId"`
+	AzureClientID     string          `json:"azureClientId"`
+	AzureClientSecret *string         `json:"azureClientSecret,omitempty"`
+	Endpoint          string          `json:"endpoint"`
+	Alerts            DataStreamInput `json:"alerts"`
+	Ulogs             DataStreamInput `json:"ulogs"`
+	Telemetries       DataStreamInput `json:"telemetries"`
+	TelemetriesV2     DataStreamInput `json:"telemetriesV2"`
+}
+
+// DataForwardingInput is the input for dataForwarding operations.
+type DataForwardingInput struct {
+	S3         ForwardS3Input
+	Sentinel   ForwardSentinelInput
+	SentinelV2 ForwardSentinelV2Input
+}
+
+// ── Response types ────────────────────────────────────────────────────────────
+
+// DataForwardingSettings contains Forward data.
+type DataForwardingSettings struct {
+	S3         *ForwardS3         `json:"s3"`
+	Sentinel   *ForwardSentinel   `json:"sentinel"`
+	SentinelV2 *ForwardSentinelV2 `json:"sentinelV2"`
+}
+
+// ForwardS3 contains ForwardS3 data.
 type ForwardS3 struct {
 	Bucket         string `json:"bucket"`
 	Enabled        bool   `json:"enabled"`
@@ -134,7 +144,7 @@ type ForwardS3 struct {
 	CloudFormation string `json:"cloudformation"`
 }
 
-// ForwardSentinel represents Sentinel forwarding settings.
+// ForwardSentinel contains ForwardSentinel data.
 type ForwardSentinel struct {
 	Enabled    bool   `json:"enabled"`
 	CustomerID string `json:"customerId"`
@@ -143,106 +153,52 @@ type ForwardSentinel struct {
 	Domain     string `json:"domain"`
 }
 
-// DataStream represents a Sentinel v2 data stream.
+// ForwardSentinelV2 contains ForwardSentinelV2 data.
+type ForwardSentinelV2 struct {
+	Enabled       bool        `json:"enabled"`
+	AzureTenantID string      `json:"azureTenantId"`
+	AzureClientID string      `json:"azureClientId"`
+	SecretExists  bool        `json:"secretExists"`
+	Endpoint      string      `json:"endpoint"`
+	Alerts        *DataStream `json:"alerts"`
+	Ulogs         *DataStream `json:"ulogs"`
+	Telemetries   *DataStream `json:"telemetries"`
+	TelemetriesV2 *DataStream `json:"telemetriesV2"`
+}
+
+// DataStream contains DataStream data.
 type DataStream struct {
 	Enabled        bool    `json:"enabled"`
 	DcrImmutableID *string `json:"dcrImmutableId"`
 	StreamName     *string `json:"streamName"`
 }
 
-// ForwardSentinelV2 represents Sentinel v2 forwarding settings.
-type ForwardSentinelV2 struct {
-	Enabled       bool       `json:"enabled"`
-	SecretExists  bool       `json:"secretExists"`
-	AzureTenantID string     `json:"azureTenantId"`
-	AzureClientID string     `json:"azureClientId"`
-	Endpoint      string     `json:"endpoint"`
-	Alerts        DataStream `json:"alerts"`
-	ULogs         DataStream `json:"ulogs"`
-	Telemetries   DataStream `json:"telemetries"`
-	TelemetriesV2 DataStream `json:"telemetriesV2"`
-}
-
-// DataForwardingSettings represents organization forwarding settings.
-type DataForwardingSettings struct {
-	S3         ForwardS3         `json:"s3"`
-	Sentinel   ForwardSentinel   `json:"sentinel"`
-	SentinelV2 ForwardSentinelV2 `json:"sentinelV2"`
-}
-
-// ForwardS3Input captures S3 forwarding updates.
-type ForwardS3Input struct {
-	Bucket    string `json:"bucket"`
-	Enabled   bool   `json:"enabled"`
-	Encrypted bool   `json:"encrypted"`
-	Prefix    string `json:"prefix"`
-	Role      string `json:"role"`
-}
-
-// ForwardSentinelInput captures Sentinel forwarding updates.
-type ForwardSentinelInput struct {
-	Enabled    bool   `json:"enabled"`
-	CustomerID string `json:"customerId"`
-	SharedKey  string `json:"sharedKey"`
-	LogType    string `json:"logType"`
-	Domain     string `json:"domain"`
-}
-
-// DataStreamInput captures Sentinel v2 data stream updates.
-type DataStreamInput struct {
-	Enabled        bool    `json:"enabled"`
-	DcrImmutableID *string `json:"dcrImmutableId,omitempty"`
-	StreamName     *string `json:"streamName,omitempty"`
-}
-
-// ForwardSentinelV2Input captures Sentinel v2 forwarding updates.
-type ForwardSentinelV2Input struct {
-	Enabled           bool            `json:"enabled"`
-	AzureTenantID     string          `json:"azureTenantId"`
-	AzureClientID     string          `json:"azureClientId"`
-	AzureClientSecret *string         `json:"azureClientSecret,omitempty"`
-	Endpoint          string          `json:"endpoint"`
-	Alerts            DataStreamInput `json:"alerts"`
-	ULogs             DataStreamInput `json:"ulogs"`
-	Telemetries       DataStreamInput `json:"telemetries"`
-	TelemetriesV2     DataStreamInput `json:"telemetriesV2"`
-}
-
-// DataForwardingInput captures updates for forwarding settings.
-type DataForwardingInput struct {
-	S3         ForwardS3Input         `json:"s3"`
-	Sentinel   ForwardSentinelInput   `json:"sentinel"`
-	SentinelV2 ForwardSentinelV2Input `json:"sentinelV2"`
-}
-
-// DataForwardingResult represents organization forwarding settings with UUID.
+// DataForwardingResult represents a Jamf Protect dataForwardingResult.
 type DataForwardingResult struct {
-	UUID    string                 `json:"uuid"`
-	Forward DataForwardingSettings `json:"forward"`
+	UUID    string                  `json:"uuid"`
+	Forward *DataForwardingSettings `json:"forward"`
 }
 
-// GetDataForwarding retrieves organization forwarding settings.
+// ── Client methods ────────────────────────────────────────────────────────────
+
+// GetDataForwarding retrieves the dataForwardingResult.
 func (c *Client) GetDataForwarding(ctx context.Context) (DataForwardingResult, error) {
 	var result struct {
-		GetOrganization DataForwardingResult `json:"getOrganization"`
+		GetDataForwarding DataForwardingResult `json:"getOrganization"`
 	}
-	if err := c.transport.DoGraphQL(ctx, "/app", dataForwardingGetQuery, nil, &result); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", getDataForwardingQuery, nil, &result); err != nil {
 		return DataForwardingResult{}, fmt.Errorf("GetDataForwarding: %w", err)
 	}
-	return result.GetOrganization, nil
+	return result.GetDataForwarding, nil
 }
 
-// UpdateDataForwarding updates organization forwarding settings.
+// UpdateDataForwarding updates the dataForwardingResult.
 func (c *Client) UpdateDataForwarding(ctx context.Context, input DataForwardingInput) (DataForwardingResult, error) {
-	vars := map[string]any{
-		"s3":         input.S3,
-		"sentinel":   input.Sentinel,
-		"sentinelV2": input.SentinelV2,
-	}
+	vars := map[string]any{"s3": input.S3, "sentinel": input.Sentinel, "sentinelV2": input.SentinelV2}
 	var result struct {
 		UpdateOrganizationForward DataForwardingResult `json:"updateOrganizationForward"`
 	}
-	if err := c.transport.DoGraphQL(ctx, "/app", dataForwardingUpdateMutation, vars, &result); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", updateDataForwardingMutation, vars, &result); err != nil {
 		return DataForwardingResult{}, fmt.Errorf("UpdateDataForwarding: %w", err)
 	}
 	return result.UpdateOrganizationForward, nil

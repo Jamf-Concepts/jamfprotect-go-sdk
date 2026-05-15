@@ -681,12 +681,48 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 		})
 
 		// Recursively generate nested InputObject types (with json tags, in dependency order).
-		nested, err := buildNestedInputTypes(schema, op.InputType, seenNested, scalars, res.InputTypeRenames)
+		nested, err := buildNestedInputTypes(schema, op.InputType, seenNested, scalars, res.InputTypeRenames, res.NullableNestedInputFields)
 		if err != nil {
 			return nil, nil, fmt.Errorf("nested input types for %s: %w", op.InputType, err)
 		}
 		inputTypes = append(inputTypes, nested...)
 	}
+
+	// groupInputAs: generate a plain Go struct from inlineArgs (no json tags, no buildVarsFunc).
+	seenGroupInputs := make(map[string]bool)
+	for _, op := range res.Operations {
+		if op.GroupInputAs == "" || seenGroupInputs[op.GroupInputAs] {
+			continue
+		}
+		seenGroupInputs[op.GroupInputAs] = true
+		var fields []IRField
+		for _, a := range op.InlineArgs {
+			fields = append(fields, IRField{
+				Name: toPascalCase(a.Name),
+				Type: a.GoType,
+			})
+		}
+		baseName := strings.TrimSuffix(op.GroupInputAs, "Input")
+		inputTypes = append(inputTypes, IRStruct{
+			Comment: fmt.Sprintf("// %s is the input for %s operations.", op.GroupInputAs, lcFirst(baseName)),
+			Name:    op.GroupInputAs,
+			Fields:  fields,
+			IsInput: true,
+		})
+	}
+
+	// multi_wrapped_update: generate composite input struct + component nested types.
+	for _, op := range res.Operations {
+		if op.Kind != "multi_wrapped_update" || len(op.MultiWrappedInputs) == 0 {
+			continue
+		}
+		mwTypes, err := buildMultiWrappedInputTypes(schema, op, res, seenNested, scalars)
+		if err != nil {
+			return nil, nil, fmt.Errorf("multi_wrapped_update input types for %s: %w", op.Name, err)
+		}
+		inputTypes = append(inputTypes, mwTypes...)
+	}
+
 	return inputTypes, buildVarsFuncs, nil
 }
 
@@ -713,7 +749,8 @@ func applyInputTypeRenames(goType string, renames map[string]string) string {
 // buildNestedInputTypes recursively generates Go structs for nested InputObject types
 // referenced by the fields of the given schema input type. The generated structs include
 // json tags (required for direct serialisation into vars maps).
-func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]bool, scalars map[string]string, renames map[string]string) ([]IRStruct, error) {
+// nullableNestedFields maps schema type name → field names that should use *T + omitempty json tag.
+func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]bool, scalars map[string]string, renames map[string]string, nullableNestedFields map[string][]string) ([]IRStruct, error) {
 	def := schema.Types[typeName]
 	if def == nil {
 		return nil, fmt.Errorf("type %q not found in schema", typeName)
@@ -731,7 +768,7 @@ func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]
 		seen[base] = true
 
 		// Recurse to get dependencies first.
-		nested, err := buildNestedInputTypes(schema, base, seen, scalars, renames)
+		nested, err := buildNestedInputTypes(schema, base, seen, scalars, renames, nullableNestedFields)
 		if err != nil {
 			return nil, err
 		}
@@ -742,13 +779,23 @@ func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]
 			goTypeName = renamed
 		}
 
+		nullableSet := make(map[string]bool)
+		for _, fn := range nullableNestedFields[base] {
+			nullableSet[fn] = true
+		}
+
 		var fields []IRField
 		for _, nf := range childDef.Fields {
 			nfGoType := resolveInputGoType(nf.Type, schema, scalars)
 			nfGoType = applyInputTypeRenames(nfGoType, renames)
+			jsonTag := nf.Name
+			if nullableSet[nf.Name] && !strings.HasPrefix(nfGoType, "[]") && !strings.HasPrefix(nfGoType, "*") {
+				nfGoType = "*" + nfGoType
+				jsonTag += ",omitempty"
+			}
 			fields = append(fields, IRField{
 				Name:    toPascalCase(nf.Name),
-				JSONTag: nf.Name,
+				JSONTag: jsonTag,
 				Type:    nfGoType,
 			})
 		}
@@ -861,7 +908,8 @@ func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, 
 	}
 
 	isMutation := kind == "create" || kind == "update" || kind == "delete" ||
-		kind == "mutation_list" || kind == "singleton_update" || kind == "update_inline"
+		kind == "mutation_list" || kind == "singleton_update" || kind == "update_inline" ||
+		kind == "multi_wrapped_update"
 	suffix := "Query"
 	if isMutation {
 		suffix = "Mutation"
@@ -1055,7 +1103,17 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		if len(op.InlineArgs) == 0 {
 			return "", fmt.Errorf("singleton_update op %q requires inlineArgs", op.Name)
 		}
+		// When resultPath has extra parts beyond gqlName, wrap bodySelection in those path parts.
+		if suffix := resultPathSuffix(op.ResultPath, gqlName); suffix != "" {
+			bodySelection = wrapBodyInMutationSuffix(suffix, bodySelection)
+		}
 		return buildInlineArgsMutationStr(op, gqlName, bodySelection, false, extraDecls, idField)
+
+	case "multi_wrapped_update":
+		if len(op.MultiWrappedInputs) == 0 {
+			return "", fmt.Errorf("multi_wrapped_update op %q requires multiWrappedInputs", op.Name)
+		}
+		return buildMultiWrappedMutationStr(op, gqlName, bodySelection), nil
 
 	case "update_inline":
 		// Update mutation taking primitive args (idField + others), wrapped in input.
@@ -1126,18 +1184,201 @@ func buildMutationListStr(schema *ast.Schema, inputTypeName, gqlName, bodySelect
 	return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(input: %s) {\n\t\t%s {\n\t\t\t%s\n\t\t}\n\t}\n}\n", gqlName, vars, gqlName, input, wrapField, bodySelection), nil
 }
 
+// resultPathSuffix strips the gqlName prefix from resultPath and returns the remainder.
+// E.g. resultPath="updateOrganizationRetention.retention", gqlName="updateOrganizationRetention" → "retention".
+func resultPathSuffix(resultPath, gqlName string) string {
+	prefix := gqlName + "."
+	if strings.HasPrefix(resultPath, prefix) {
+		return resultPath[len(prefix):]
+	}
+	return ""
+}
+
+// wrapBodyInMutationSuffix wraps bodySelection in nested blocks for the given dot-path suffix.
+// The wrapping starts at tab depth 2 (inside "mutation { gqlName { ... } }").
+func wrapBodyInMutationSuffix(suffix, body string) string {
+	parts := strings.Split(suffix, ".")
+	cur := body
+	for i := len(parts) - 1; i >= 0; i-- {
+		depth := 2 + i
+		inner := strings.Repeat("\t", depth+1)
+		outer := strings.Repeat("\t", depth)
+		cur = fmt.Sprintf("%s {\n%s%s\n%s}", parts[i], inner, cur, outer)
+	}
+	return cur
+}
+
+// inputTreeNode is an ordered tree node for building nested GQL input literals from InputPath.
+type inputTreeNode struct {
+	key      string
+	children []*inputTreeNode
+	varName  string // non-empty for leaf nodes
+}
+
+// buildNestedInputLiteralStr builds a nested GQL input literal from args with InputPath.
+// E.g. args with paths "retention.database.log.numberOfDays" etc. produce
+// {retention: {database: {log: {numberOfDays: $databaseLogDays}, ...}, ...}}.
+func buildNestedInputLiteralStr(args []InlineArg) string {
+	root := &inputTreeNode{}
+	for _, a := range args {
+		if a.InputPath == "" || a.IsID {
+			continue
+		}
+		parts := strings.Split(a.InputPath, ".")
+		cur := root
+		for _, p := range parts[:len(parts)-1] {
+			var found *inputTreeNode
+			for _, ch := range cur.children {
+				if ch.key == p {
+					found = ch
+					break
+				}
+			}
+			if found == nil {
+				found = &inputTreeNode{key: p}
+				cur.children = append(cur.children, found)
+			}
+			cur = found
+		}
+		cur.children = append(cur.children, &inputTreeNode{key: parts[len(parts)-1], varName: a.GQLVar})
+	}
+	return serializeInputTree(root.children)
+}
+
+// serializeInputTree renders an inputTreeNode slice as a GQL object literal.
+func serializeInputTree(nodes []*inputTreeNode) string {
+	parts := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		if len(n.children) == 0 {
+			parts = append(parts, n.key+": $"+n.varName)
+		} else {
+			parts = append(parts, n.key+": "+serializeInputTree(n.children))
+		}
+	}
+	return "{" + strings.Join(parts, ", ") + "}"
+}
+
+// buildMultiWrappedMutationStr builds a mutation with N typed input variables, each a separate
+// schema InputObject type (e.g. $s3: OrganizationS3ForwardInput!), all passed as input: {s3: $s3, ...}.
+func buildMultiWrappedMutationStr(op OperationConfig, gqlName, bodySelection string) string {
+	var varDecls []string
+	var inputParts []string
+	for _, mw := range op.MultiWrappedInputs {
+		varDecls = append(varDecls, "$"+mw.GQLVar+": "+mw.SchemaType)
+		inputParts = append(inputParts, mw.GQLVar+": $"+mw.GQLVar)
+	}
+	vars := strings.Join(varDecls, ", ")
+	input := "{" + strings.Join(inputParts, ", ") + "}"
+	return fmt.Sprintf("\nmutation %s(%s) {\n\t%s(input: %s) {\n\t\t%s\n\t}\n}\n", gqlName, vars, gqlName, input, bodySelection)
+}
+
+// buildMultiWrappedUpdateBody builds the method body for a multi_wrapped_update operation.
+func buildMultiWrappedUpdateBody(op OperationConfig, returnType, resultKey, endpoint, constName string) string {
+	tag := bt + `json:"` + resultKey + `"` + bt
+	var parts []string
+	for _, mw := range op.MultiWrappedInputs {
+		parts = append(parts, fmt.Sprintf("%q: input.%s", mw.GQLVar, mw.GoField))
+	}
+	varsLit := "map[string]any{" + strings.Join(parts, ", ") + "}"
+	return fmt.Sprintf(
+		"vars := %s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
+		varsLit, toPascalCase(resultKey), returnType, tag, endpoint, constName, zeroVal(returnType), op.Name, toPascalCase(resultKey))
+}
+
+// buildMultiWrappedInputTypes generates all input structs for a multi_wrapped_update operation:
+// component input types (with json tags) + the composite input struct (no json tags).
+func buildMultiWrappedInputTypes(schema *ast.Schema, op OperationConfig, res ResourceConfig, seen map[string]bool, scalars map[string]string) ([]IRStruct, error) {
+	var result []IRStruct
+	for _, mw := range op.MultiWrappedInputs {
+		schemaTypeName := strings.TrimSuffix(mw.SchemaType, "!")
+		if seen[schemaTypeName] {
+			continue
+		}
+		seen[schemaTypeName] = true
+
+		def := schema.Types[schemaTypeName]
+		if def == nil {
+			return nil, fmt.Errorf("input type %q not found in schema", schemaTypeName)
+		}
+
+		// Generate nested types (dependencies) first.
+		nested, err := buildNestedInputTypes(schema, schemaTypeName, seen, scalars, res.InputTypeRenames, res.NullableNestedInputFields)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, nested...)
+
+		// Generate the component type itself.
+		goTypeName := toPascalCase(schemaTypeName)
+		if renamed, ok := res.InputTypeRenames[schemaTypeName]; ok {
+			goTypeName = renamed
+		}
+		nullableSet := make(map[string]bool)
+		for _, fn := range res.NullableNestedInputFields[schemaTypeName] {
+			nullableSet[fn] = true
+		}
+		var fields []IRField
+		for _, f := range def.Fields {
+			fGoType := resolveInputGoType(f.Type, schema, scalars)
+			fGoType = applyInputTypeRenames(fGoType, res.InputTypeRenames)
+			jsonTag := f.Name
+			if nullableSet[f.Name] && !strings.HasPrefix(fGoType, "[]") && !strings.HasPrefix(fGoType, "*") {
+				fGoType = "*" + fGoType
+				jsonTag += ",omitempty"
+			}
+			fields = append(fields, IRField{
+				Name:    toPascalCase(f.Name),
+				JSONTag: jsonTag,
+				Type:    fGoType,
+			})
+		}
+		result = append(result, IRStruct{
+			Comment: fmt.Sprintf("// %s is a nested input type.", goTypeName),
+			Name:    goTypeName,
+			Fields:  fields,
+			IsInput: true,
+		})
+	}
+
+	// Composite input struct: no json tags (Go-only struct, not directly serialized).
+	goCompositeType := op.InputTypeGoName
+	var compositeFields []IRField
+	for _, mw := range op.MultiWrappedInputs {
+		compositeFields = append(compositeFields, IRField{
+			Name: mw.GoField,
+			Type: mw.GoInputType,
+		})
+	}
+	baseName := strings.TrimSuffix(goCompositeType, "Input")
+	result = append(result, IRStruct{
+		Comment: fmt.Sprintf("// %s is the input for %s operations.", goCompositeType, lcFirst(baseName)),
+		Name:    goCompositeType,
+		Fields:  compositeFields,
+		IsInput: true,
+	})
+
+	return result, nil
+}
+
 // buildInlineArgsMutationStr builds a mutation from primitive inline args.
 // If wrapInItems is true, wraps the response in {<wrapField>: [T]} where wrapField defaults to "items"
 // or is derived from op.ResultPath when set.
+// If any arg has InputPath set, uses buildNestedInputLiteralStr to build the input literal.
 func buildInlineArgsMutationStr(op OperationConfig, gqlName, bodySelection string, wrapInItems bool, extraDecls, idField string) (string, error) {
 	var varDecls []string
 	var idArgPart string
 	var inputParts []string
+	hasInputPath := false
+	for _, a := range op.InlineArgs {
+		if a.InputPath != "" {
+			hasInputPath = true
+		}
+	}
 	for _, a := range op.InlineArgs {
 		varDecls = append(varDecls, "$"+a.GQLVar+": "+a.GQLType)
 		if a.IsID {
 			idArgPart = a.GQLVar + ": $" + a.GQLVar
-		} else {
+		} else if !hasInputPath {
 			inputParts = append(inputParts, a.GQLVar+": $"+a.GQLVar)
 		}
 	}
@@ -1146,7 +1387,9 @@ func buildInlineArgsMutationStr(op OperationConfig, gqlName, bodySelection strin
 		vars += ", " + extraDecls
 	}
 	var argPart string
-	if idArgPart != "" {
+	if hasInputPath {
+		argPart = "input: " + buildNestedInputLiteralStr(op.InlineArgs)
+	} else if idArgPart != "" {
 		if len(inputParts) > 0 {
 			argPart = idArgPart + ", input: {" + strings.Join(inputParts, ", ") + "}"
 		} else {
@@ -1366,10 +1609,24 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		body = buildMutationListBody(op, returnType, resultKey, endpoint, constName, rbacMap, extraVarValues)
 
 	case "singleton_update":
-		sigStr, _ := inlineArgsSignature(op.InlineArgs)
-		sig = fmt.Sprintf("(ctx context.Context%s) (%s, error)", sigStr, returnType)
+		if op.GroupInputAs != "" {
+			sig = fmt.Sprintf("(ctx context.Context, input %s) (%s, error)", op.GroupInputAs, returnType)
+		} else {
+			sigStr, _ := inlineArgsSignature(op.InlineArgs)
+			sig = fmt.Sprintf("(ctx context.Context%s) (%s, error)", sigStr, returnType)
+		}
 		doc = fmt.Sprintf("// %s updates the %s.", op.Name, lcFirst(returnType))
 		body = buildSingletonUpdateBody(op, returnType, resultKey, endpoint, constName, rbacMap, extraVarValues)
+
+	case "multi_wrapped_update":
+		goInputName := op.InputTypeGoName
+		if goInputName == "" {
+			err = fmt.Errorf("multi_wrapped_update op %q requires inputTypeGoName", op.Name)
+			return
+		}
+		sig = fmt.Sprintf("(ctx context.Context, input %s) (%s, error)", goInputName, returnType)
+		doc = fmt.Sprintf("// %s updates the %s.", op.Name, lcFirst(returnType))
+		body = buildMultiWrappedUpdateBody(op, returnType, resultKey, endpoint, constName)
 
 	case "update_inline":
 		sigStr, _ := inlineArgsSignature(op.InlineArgs)
@@ -1601,16 +1858,53 @@ func buildMutationListBody(op OperationConfig, returnType, resultKey, endpoint, 
 }
 
 func buildSingletonUpdateBody(op OperationConfig, returnType, resultKey, endpoint, constName, rbacMap string, extraVarValues map[string]any) string {
-	tag := bt + `json:"` + resultKey + `"` + bt
 	var parts []string
 	for _, a := range op.InlineArgs {
-		parts = append(parts, fmt.Sprintf("%q: %s", a.GQLVar, a.Name))
+		goAccess := a.Name
+		if op.GroupInputAs != "" {
+			goAccess = "input." + toPascalCase(a.Name)
+		}
+		parts = append(parts, fmt.Sprintf("%q: %s", a.GQLVar, goAccess))
 	}
 	baseLit := "map[string]any{" + strings.Join(parts, ", ") + "}"
 	varAssign := mergeVarsExpr(baseLit, buildMapLit(extraVarValues), rbacMap)
-	return fmt.Sprintf(
-		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
-		varAssign, toPascalCase(resultKey), returnType, tag, endpoint, constName, zeroVal(returnType), op.Name, toPascalCase(resultKey))
+
+	if op.ResultPath == "" {
+		tag := bt + `json:"` + resultKey + `"` + bt
+		return fmt.Sprintf(
+			"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
+			varAssign, toPascalCase(resultKey), returnType, tag, endpoint, constName, zeroVal(returnType), op.Name, toPascalCase(resultKey))
+	}
+
+	// resultPath: build nested result struct (mirrors buildSingletonGetBody).
+	pathParts := strings.Split(op.ResultPath, ".")
+	var b strings.Builder
+	b.WriteString(varAssign)
+	b.WriteString("\n\tvar result struct {\n")
+	indent := "\t\t"
+	var closers []string
+	for i, part := range pathParts {
+		fieldGoName := toPascalCase(part)
+		if i == len(pathParts)-1 {
+			fmt.Fprintf(&b, "%s%s %s %sjson:\"%s\"%s\n", indent, fieldGoName, returnType, bt, part, bt)
+		} else {
+			fmt.Fprintf(&b, "%s%s struct {\n", indent, fieldGoName)
+			closers = append(closers, indent+"} "+bt+"json:\""+part+"\""+bt)
+			indent += "\t"
+		}
+	}
+	for i := len(closers) - 1; i >= 0; i-- {
+		b.WriteString(closers[i] + "\n")
+	}
+	b.WriteString("\t}\n")
+	fmt.Fprintf(&b, "\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s: %%w\", err)\n\t}\n", endpoint, constName, zeroVal(returnType), op.Name)
+	var accessor strings.Builder
+	accessor.WriteString("result")
+	for _, part := range pathParts {
+		accessor.WriteString("." + toPascalCase(part))
+	}
+	fmt.Fprintf(&b, "\treturn %s, nil", accessor.String())
+	return b.String()
 }
 
 func buildUpdateInlineBody(op OperationConfig, returnType, resultKey, endpoint, constName, rbacMap string, extraVarValues map[string]any) string {

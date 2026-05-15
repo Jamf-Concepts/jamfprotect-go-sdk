@@ -317,6 +317,19 @@ type CisId {
 	osVersion: String
 	id: String
 }
+type ColdStorageRetention {
+	alert: ColdStorageSettings
+}
+input ColdStorageRetentionInput {
+	log: ColdStorageSettingsInput
+	alert: ColdStorageSettingsInput!
+}
+type ColdStorageSettings {
+	numberOfDays: Int
+}
+input ColdStorageSettingsInput {
+	numberOfDays: Int!
+}
 type ComplianceBaselineScore {
 	updated: AWSDate
 	score: Float
@@ -476,6 +489,24 @@ input ConnectionQueryInput {
 	order: ConnectionOrderInput
 	pageSize: Int
 }
+type DataStream {
+	enabled: Boolean
+	dcrImmutableId: String
+	streamName: String
+}
+input DataStreamInput {
+	enabled: Boolean!
+	dcrImmutableId: String
+	streamName: String
+}
+type DbStorageRetention {
+	log: RecordCount
+	alert: RecordCount
+}
+input DbStorageRetentionInput {
+	log: RecordCountInput!
+	alert: RecordCountInput!
+}
 enum ES_IGNORE_ACTIVITY {
 	ThreatPrevention
 	TelemetryV2
@@ -610,6 +641,37 @@ enum FULL_DISK_ACCESS_STATUS {
 	Unauthorized
 	Unknown
 }
+type Forward {
+	s3: ForwardS3
+	sentinel: ForwardSentinel
+	sentinelV2: ForwardSentinelV2
+}
+type ForwardS3 {
+	bucket: String
+	enabled: Boolean
+	encrypted: Boolean
+	prefix: String
+	role: String
+	cloudformation: String
+}
+type ForwardSentinel {
+	enabled: Boolean
+	customerId: String
+	sharedKey: String
+	logType: String
+	domain: String
+}
+type ForwardSentinelV2 {
+	enabled: Boolean
+	azureTenantId: String
+	azureClientId: String
+	secretExists: Boolean
+	endpoint: String
+	alerts: DataStream
+	ulogs: DataStream
+	telemetries: DataStream
+	telemetriesV2: DataStream
+}
 type Group {
 	id: ID!
 	name: String!
@@ -693,6 +755,8 @@ enum OrderDirection {
 	DESC
 }
 type Organization {
+	uuid: ID
+	forward: Forward
 	configFreeze: Boolean
 }
 type OrganizationDownload {
@@ -703,6 +767,43 @@ type OrganizationDownload {
 	websocket_auth: String
 	installerUuid: ID
 	tamperPreventionProfile: String
+}
+input OrganizationForwardInput {
+	s3: OrganizationS3ForwardInput!
+	sentinel: OrganizationSentinelForwardInput!
+	sentinelV2: OrganizationSentinelV2ForwardInput!
+}
+input OrganizationRetentionInput {
+	retention: OrganizationRetentionInputs!
+}
+input OrganizationRetentionInputs {
+	database: DbStorageRetentionInput!
+	cold: ColdStorageRetentionInput!
+}
+input OrganizationS3ForwardInput {
+	enabled: Boolean!
+	bucket: String
+	encrypted: Boolean
+	prefix: String
+	role: String
+}
+input OrganizationSentinelForwardInput {
+	enabled: Boolean!
+	customerId: String
+	sharedKey: String
+	logType: String
+	domain: String
+}
+input OrganizationSentinelV2ForwardInput {
+	enabled: Boolean!
+	azureTenantId: String
+	azureClientId: String
+	azureClientSecret: String
+	endpoint: String
+	alerts: DataStreamInput!
+	ulogs: DataStreamInput!
+	telemetries: DataStreamInput!
+	telemetriesV2: DataStreamInput!
 }
 enum PREVENT_LIST_TYPE {
 	TEAMID
@@ -813,6 +914,19 @@ enum RBAC_RESOURCE {
 type RbacPermissions {
 	R: [RBAC_RESOURCE!]
 	W: [RBAC_RESOURCE!]
+}
+type RecordCount {
+	recordCount: Int
+	numberOfDays: Int
+}
+input RecordCountInput {
+	recordCount: Int
+	numberOfDays: Int!
+}
+type Retention {
+	database: DbStorageRetention
+	cold: ColdStorageRetention
+	updated: AWSDateTime
 }
 type Role {
 	id: ID
@@ -1179,6 +1293,8 @@ type Mutation {
 	updateInsightStatus(uuid: ID!, input: InsightInput!): Insight
 	updateInternalAnalytic(input: InternalAnalyticInput!, uuid: ID!): Analytic
 	updateOrganizationConfigFreeze(input: ConfigFreezeInput!): Organization
+	updateOrganizationForward(input: OrganizationForwardInput!): Organization
+	updateOrganizationRetention(input: OrganizationRetentionInput!): Organization
 	updatePreventList(input: PreventListInput!, id: ID!): PreventList
 	updateRole(id: ID!, input: RoleInput!): Role
 	updateTelemetryV2(id: ID!, input: TelemetryInputV2!): TelemetryV2
@@ -1197,6 +1313,7 @@ type Query {
 	getExceptionSet(uuid: ID!): ExceptionSet
 	getFleetComplianceBaselineScore(date: AWSDate): ComplianceBaselineScore
 	getGroup(id: ID!): Group
+	getOrganization: Organization
 	getOrganizationDownloads: OrganizationDownload
 	getPreventList(id: ID!): PreventList
 	getRole(id: ID!): Role
