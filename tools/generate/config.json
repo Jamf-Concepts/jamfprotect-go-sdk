@@ -1094,6 +1094,14 @@
     {
       "source": "_static/types.go",
       "dest": "types.go"
+    },
+    {
+      "source": "_static/data_retention.go",
+      "dest": "data_retention.go"
+    },
+    {
+      "source": "_static/data_forwarding.go",
+      "dest": "data_forwarding.go"
     }
   ]
 }
