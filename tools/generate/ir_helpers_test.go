@@ -95,7 +95,7 @@ func TestZeroVal(t *testing.T) {
 	cases := []struct {
 		t, want string
 	}{
-		{"int64", "int64{}"},  // zeroVal does NOT special-case scalars; that's primitiveZeroExpr.
+		{"int64", "int64{}"}, // zeroVal does NOT special-case scalars; that's primitiveZeroExpr.
 		{"*Role", "nil"},
 		{"[]Role", "nil"},
 		{"Role", "Role{}"},

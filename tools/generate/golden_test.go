@@ -14,7 +14,8 @@ import (
 )
 
 // updateGolden refreshes the *.golden files when set. Run with:
-//   go test -run TestGolden -update ./tools/generate/
+//
+//	go test -run TestGolden -update ./tools/generate/
 var updateGolden = flag.Bool("update", false, "update golden files instead of asserting")
 
 // renderResource is a thin wrapper around buildIR + the resource template.
