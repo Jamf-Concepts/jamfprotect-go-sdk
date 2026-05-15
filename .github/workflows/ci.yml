@@ -62,6 +62,17 @@ jobs:
       - run: cd tools && go install github.com/hashicorp/copywrite
       - run: copywrite headers --plan --config .copywrite.hcl
 
+  generate:
+    name: Generated Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: make generate
+      - run: git diff --exit-code -- jamfprotect/ schema/
+
   govulncheck:
     name: Vulnerability Check
     runs-on: ubuntu-latest

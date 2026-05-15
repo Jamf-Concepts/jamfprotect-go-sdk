@@ -6,6 +6,7 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
 	"path/filepath"
 )
 
@@ -19,8 +20,19 @@ func main() {
 	}
 
 	base := filepath.Dir(*configPath)
-	schemaPath := filepath.Join(base, cfg.SchemaPath)
 	outputDir := filepath.Join(base, cfg.OutputDir)
+
+	// Try the private schema first; fall back to the committed filtered schema.
+	schemaPath := filepath.Join(base, cfg.SchemaPath)
+	usingFiltered := false
+	if _, statErr := os.Stat(schemaPath); statErr != nil {
+		if cfg.FilteredSchemaPath == "" {
+			log.Fatalf("schema not found at %s and no filteredSchemaPath configured", schemaPath)
+		}
+		schemaPath = filepath.Join(base, cfg.FilteredSchemaPath)
+		usingFiltered = true
+		log.Printf("private schema not found; using filtered schema at %s", schemaPath)
+	}
 
 	schema, err := loadSchema(schemaPath)
 	if err != nil {
@@ -50,5 +62,14 @@ func main() {
 			log.Fatalf("emit static %s: %v", s.Dest, err)
 		}
 		log.Printf("static %s", dstPath)
+	}
+
+	// Emit filtered schema when we used the full private schema.
+	if !usingFiltered && cfg.FilteredSchemaPath != "" {
+		filteredPath := filepath.Join(base, cfg.FilteredSchemaPath)
+		if err := emitFilteredSchema(schema, cfg, filteredPath); err != nil {
+			log.Fatalf("emit filtered schema: %v", err)
+		}
+		log.Printf("filtered schema → %s", filteredPath)
 	}
 }

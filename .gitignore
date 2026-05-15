@@ -47,5 +47,8 @@ dist/
 # Testing and Debugging
 testing/
 
+# Generation plan (contains real credentials - never commit)
+GENERATION_PLAN.md
+
 # Compiled generator binary
 tools/generate/generate

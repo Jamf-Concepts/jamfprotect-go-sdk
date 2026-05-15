@@ -1,6 +1,7 @@
 {
-  "schemaPath": "../../testing/schema.graphql",
-  "outputDir":  "../../jamfprotect",
+  "schemaPath":         "../../testing/schema.graphql",
+  "filteredSchemaPath": "../../schema/schema.graphql",
+  "outputDir":          "../../jamfprotect",
   "scalars": {
     "AWSDateTime":  "string",
     "AWSJSON":      "string",
