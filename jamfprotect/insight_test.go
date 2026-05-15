@@ -67,8 +67,8 @@ func TestListInsights(t *testing.T) {
 	if !insights[0].Enabled {
 		t.Error("expected first insight to be enabled")
 	}
-	if len(insights[0].CisID) != 1 || insights[0].CisID[0].ID != "2.6.6" {
-		t.Errorf("expected cisid [2.6.6], got %v", insights[0].CisID)
+	if len(insights[0].Cisid) != 1 || insights[0].Cisid[0].ID != "2.6.6" {
+		t.Errorf("expected cisid [2.6.6], got %v", insights[0].Cisid)
 	}
 	if insights[1].Enabled {
 		t.Error("expected second insight to be disabled")

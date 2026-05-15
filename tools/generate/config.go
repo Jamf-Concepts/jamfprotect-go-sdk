@@ -108,15 +108,28 @@ type OperationConfig struct {
 	NoFragment      bool           `json:"noFragment,omitempty"`     // suppress fragment append (for ops with custom return shape)
 	DateRangeArg    string         `json:"dateRangeArg,omitempty"`   // for date_paginated: Go arg name (e.g. "dateRange") of type *NameDateRange
 	ReturnIsList    bool           `json:"returnIsList,omitempty"`   // when true, the op returns []ReturnType instead of ReturnType (for singleton_get/singleton_update on list-shaped results)
+	TopLevelArgs    []TopLevelArg  `json:"topLevelArgs,omitempty"`   // extra GQL args forwarded as top-level field args alongside input (e.g. uuid in listInsightComputers)
+	FieldArgs       string         `json:"fieldArgs,omitempty"`       // verbatim GQL field argument string appended to the field call (e.g. "date: $date")
 }
 
 // InlineArg is a primitive Go argument for singleton_update or inline-arg operations.
 type InlineArg struct {
-	Name    string `json:"name"`             // Go arg name (camelCase)
-	GoType  string `json:"goType"`           // Go type (e.g. "bool", "string")
-	GQLVar  string `json:"gqlVar"`           // GQL variable name (e.g. "configFreeze")
-	GQLType string `json:"gqlType"`          // GQL type declaration (e.g. "Boolean!")
-	IsID    bool   `json:"isId,omitempty"`   // true if this is the resource ID arg (not wrapped in input)
+	Name       string `json:"name"`               // Go arg name (camelCase)
+	GoType     string `json:"goType"`             // Go type (e.g. "bool", "string")
+	GQLVar     string `json:"gqlVar"`             // GQL variable name (e.g. "configFreeze")
+	GQLType    string `json:"gqlType"`            // GQL type declaration (e.g. "Boolean!")
+	IsID       bool   `json:"isId,omitempty"`     // true if this is the resource ID arg (not wrapped in input)
+	IsOptional bool   `json:"isOptional,omitempty"` // when true, only include var when non-zero/non-nil
+}
+
+// TopLevelArg is a primitive Go argument forwarded as both a GQL top-level var and a field arg
+// (outside of the standard input:{} constructor). Used for paginated queries like listInsightComputers
+// where uuid is a top-level field argument alongside the paginated input.
+type TopLevelArg struct {
+	Name    string `json:"name"`    // Go arg name (camelCase)
+	GoType  string `json:"goType"`  // Go type (e.g. "string")
+	GQLVar  string `json:"gqlVar"`  // GQL variable name (e.g. "uuid")
+	GQLType string `json:"gqlType"` // GQL type declaration (e.g. "ID!")
 }
 
 func loadConfig(path string) (Config, error) {
