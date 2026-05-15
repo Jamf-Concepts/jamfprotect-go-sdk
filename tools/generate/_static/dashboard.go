@@ -75,9 +75,18 @@ type RiskyComputerAlerts struct {
 }
 
 // GetCount returns aggregated counts of computers, alerts, and insights computers.
+// Each CountQueryInput field must contain a filter with at least one populated key for
+// the server to return its corresponding count; empty objects and nulls yield null.
+// {or: []} is the canonical "match everything" filter accepted by the server.
 func (c *Client) GetCount(ctx context.Context) (CountResponse, error) {
+	matchAll := map[string]any{"or": []any{}}
 	vars := map[string]any{
-		"input": map[string]any{},
+		"input": map[string]any{
+			"computers":         matchAll,
+			"alerts":            matchAll,
+			"alertsComputers":   matchAll,
+			"insightsComputers": matchAll,
+		},
 	}
 	var result struct {
 		GetCount CountResponse `json:"getCount"`
