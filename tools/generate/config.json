@@ -1069,6 +1069,85 @@
           "resultKey": "listAuditLogsByDate"
         }
       ]
+    },
+    {
+      "file": "removable_storage_control_set.go",
+      "typeName": "RemovableStorageControlSet",
+      "gqlTypeName": "USBControlSet",
+      "fields": ["id", "name", "description", "defaultMountAction", "defaultMessageAction", "rules", "plans", "created", "updated"],
+      "nestedTypes": [
+        {
+          "schemaName": "Plan",
+          "goName": "RemovableStorageControlSetPlan",
+          "fields": ["id", "name"]
+        },
+        {
+          "schemaName": "ProductValue",
+          "goName": "RemovableStorageControlProductPair",
+          "fields": ["vendor", "product"]
+        }
+      ],
+      "unionFields": {
+        "rules": {
+          "common": ["mountAction", "messageAction", "type"],
+          "variants": {
+            "VendorRule":  ["vendors", "applyTo"],
+            "SerialRule":  ["serials", "applyTo"],
+            "ProductRule": ["products", "applyTo"]
+          },
+          "goStruct": "RemovableStorageControlRule"
+        }
+      },
+      "inputTypeRenames": {
+        "USBControlRuleInput": "RemovableStorageControlRuleInput"
+      },
+      "operations": [
+        {
+          "name": "CreateRemovableStorageControlSet",
+          "gqlName": "createUSBControlSet",
+          "kind": "create",
+          "endpoint": "/app",
+          "resultKey": "createUSBControlSet",
+          "inputType": "USBControlSetInput",
+          "inputTypeGoName": "RemovableStorageControlSetInput"
+        },
+        {
+          "name": "GetRemovableStorageControlSet",
+          "gqlName": "getUSBControlSet",
+          "kind": "get",
+          "endpoint": "/app",
+          "resultKey": "getUSBControlSet"
+        },
+        {
+          "name": "UpdateRemovableStorageControlSet",
+          "gqlName": "updateUSBControlSet",
+          "kind": "update",
+          "endpoint": "/app",
+          "resultKey": "updateUSBControlSet",
+          "inputType": "USBControlSetInput",
+          "inputTypeGoName": "RemovableStorageControlSetInput"
+        },
+        {
+          "name": "DeleteRemovableStorageControlSet",
+          "gqlName": "deleteUSBControlSet",
+          "kind": "delete",
+          "endpoint": "/app",
+          "resultKey": "deleteUSBControlSet"
+        },
+        {
+          "name": "ListRemovableStorageControlSets",
+          "gqlName": "listUSBControlSets",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listUSBControlSets",
+          "pagination": true,
+          "paginationVars": {
+            "pageSize": 100,
+            "direction": "ASC",
+            "field": "created"
+          }
+        }
+      ]
     }
   ],
   "statics": [
@@ -1111,10 +1190,6 @@
     {
       "source": "_static/action_configuration.go",
       "dest": "action_configuration.go"
-    },
-    {
-      "source": "_static/removable_storage_control_set.go",
-      "dest": "removable_storage_control_set.go"
     }
   ]
 }

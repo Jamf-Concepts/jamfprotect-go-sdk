@@ -42,6 +42,7 @@ type ResourceConfig struct {
 	NullableInputFields    []string            `json:"nullableInputFields,omitempty"`    // input fields that should use pointer types despite being scalars
 	OptionalInputFields    []string            `json:"optionalInputFields,omitempty"`    // input fields omitted from buildVars when zero/nil (conditional inclusion)
 	InputTypeRenames       map[string]string   `json:"inputTypeRenames,omitempty"`       // schema InputObject name → Go type name for nested generated input types
+	UnionFields            map[string]UnionFieldConfig `json:"unionFields,omitempty"`    // fieldName → union/interface field expansion config
 	ExtraResponseTypes     []ExtraResponseType `json:"extraResponseTypes,omitempty"`     // additional Go response types not tied to a field (e.g. list-item types)
 	NullableResponseFields []string            `json:"nullableResponseFields,omitempty"` // top-level response fields that should use pointer types even for scalars
 	TypedEnums             []TypedEnumConfig   `json:"typedEnums,omitempty"`             // typed Go enum aliases with named constants
@@ -70,6 +71,14 @@ type ExtraResponseType struct {
 	GoName     string   `json:"goName"`
 	SchemaName string   `json:"schemaName"`
 	Fields     []string `json:"fields,omitempty"` // restrict to a subset of schema fields
+}
+
+// UnionFieldConfig describes how to expand a GraphQL interface/union field
+// in both the GQL fragment and the Go response struct.
+type UnionFieldConfig struct {
+	Common   []string            `json:"common"`   // fields from the interface itself
+	Variants map[string][]string `json:"variants"` // concrete type name → extra fields
+	GoStruct string              `json:"goStruct"` // Go struct name for the merged response type
 }
 
 // NestedTypeConfig overrides Go naming for a nested schema type within a resource.
