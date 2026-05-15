@@ -511,6 +511,10 @@ enum EXCEPTION_ANALYTIC_TYPE {
 	GPScreenshotEvent
 	GPKeylogRegisterEvent
 }
+input EncryptionRuleInput {
+	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
+	messageAction: String
+}
 type EsException {
 	type: ES_IGNORE_TYPE!
 	ignoreListType: ES_IGNORE_LIST_TYPE!
@@ -761,6 +765,20 @@ input PreventListQueryInput {
 	pageSize: Int
 	filter: PreventListFilterInput
 }
+input ProductRuleInput {
+	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
+	messageAction: String
+	applyTo: USBCONTROL_ENCRYPTION_ENUM!
+	products: [ProductValueInput!]!
+}
+type ProductValue {
+	vendor: String
+	product: String
+}
+input ProductValueInput {
+	vendor: String!
+	product: String!
+}
 enum RBAC_RESOURCE {
 	all
 	ActionConfigs
@@ -831,6 +849,12 @@ enum SEVERITY {
 	Medium
 	Low
 	Informational
+}
+input SerialRuleInput {
+	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
+	messageAction: String
+	applyTo: USBCONTROL_ENCRYPTION_ENUM!
+	serials: [String!]!
 }
 input TableBooleanFilterInput {
 	isNull: Boolean
@@ -937,6 +961,70 @@ type TelemetryV2 {
 enum UNIFIED_LOGGING_LEVEL {
 	DEFAULT
 	INFO
+}
+enum USBCONTROL_ENCRYPTION_ENUM {
+	All
+	Encrypted
+	Unencrypted
+}
+enum USBCONTROL_MOUNT_ACTION_TYPE_ENUM {
+	Prevented
+	ReadOnly
+	ReadWrite
+}
+enum USBCONTROL_RULE_TYPE {
+	Encryption
+	Vendor
+	Serial
+	Product
+}
+enum USBControlOrderField {
+	created
+	updated
+	name
+}
+input USBControlOrderInput {
+	direction: OrderDirection!
+	field: USBControlOrderField!
+}
+interface USBControlRule {
+	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
+	messageAction: String
+	type: USBCONTROL_RULE_TYPE!
+}
+input USBControlRuleInput {
+	type: USBCONTROL_RULE_TYPE!
+	encryptionRule: EncryptionRuleInput
+	vendorRule: VendorRuleInput
+	serialRule: SerialRuleInput
+	productRule: ProductRuleInput
+}
+type USBControlSet {
+	id: ID!
+	name: String!
+	description: String
+	defaultMountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM
+	defaultMessageAction: String
+	rules: [USBControlRule!]
+	plans: [Plan]
+	created: AWSDateTime
+	updated: AWSDateTime
+}
+type USBControlSetConnection {
+	items: [USBControlSet]
+	pageInfo: PageInfo
+}
+input USBControlSetInput {
+	name: String!
+	description: String
+	defaultMountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
+	defaultMessageAction: String
+	rules: [USBControlRuleInput!]!
+}
+input USBControlSetsQueryInput {
+	next: String
+	order: USBControlOrderInput
+	pageSize: Int
 }
 enum USER_SOURCE {
 	connection
@@ -1049,6 +1137,12 @@ input UserUpdateInput {
 type VanillaPackage {
 	version: String
 }
+input VendorRuleInput {
+	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
+	messageAction: String
+	applyTo: USBCONTROL_ENCRYPTION_ENUM!
+	vendors: [String!]!
+}
 type Mutation {
 	createAnalytic(input: AnalyticInput!): Analytic
 	createAnalyticSet(input: AnalyticSetInput!): AnalyticSet
@@ -1058,6 +1152,7 @@ type Mutation {
 	createPreventList(input: PreventListInput!): PreventList
 	createRole(input: RoleInput!): Role
 	createTelemetryV2(input: TelemetryInputV2!): TelemetryV2
+	createUSBControlSet(input: USBControlSetInput!): USBControlSet
 	createUnifiedLoggingFilter(input: UnifiedLoggingFilterInput!): UnifiedLoggingFilter
 	createUser(input: UserCreateInput!): User
 	deleteAnalytic(uuid: ID!): Analytic
@@ -1069,6 +1164,7 @@ type Mutation {
 	deletePreventList(id: ID!): PreventList
 	deleteRole(id: ID!): Role
 	deleteTelemetryV2(id: ID!): TelemetryV2
+	deleteUSBControlSet(id: ID!): USBControlSet
 	deleteUnifiedLoggingFilter(uuid: ID!): UnifiedLoggingFilter
 	deleteUser(id: ID!): User
 	setComputerPlan(input: ComputerPlan!, uuid: ID!): Computer
@@ -1086,6 +1182,7 @@ type Mutation {
 	updatePreventList(input: PreventListInput!, id: ID!): PreventList
 	updateRole(id: ID!, input: RoleInput!): Role
 	updateTelemetryV2(id: ID!, input: TelemetryInputV2!): TelemetryV2
+	updateUSBControlSet(id: ID!, input: USBControlSetInput!): USBControlSet
 	updateUnifiedLoggingFilter(uuid: ID!, input: UnifiedLoggingFilterInput!): UnifiedLoggingFilter
 	updateUser(id: ID!, input: UserUpdateInput!): User
 }
@@ -1104,6 +1201,7 @@ type Query {
 	getPreventList(id: ID!): PreventList
 	getRole(id: ID!): Role
 	getTelemetryV2(id: ID!): TelemetryV2
+	getUSBControlSet(id: ID!): USBControlSet
 	getUnifiedLoggingFilter(uuid: ID!): UnifiedLoggingFilter
 	getUser(id: ID!): User
 	listAlerts(input: AlertQueryInput!): AlertConnection
@@ -1120,6 +1218,7 @@ type Query {
 	listPreventLists(input: PreventListQueryInput): PreventListConnection
 	listRoles(input: RoleQueryInput): RoleConnection
 	listTelemetriesV2(input: TelemetryQueryInput): TelemetryConnectionV2
+	listUSBControlSets(input: USBControlSetsQueryInput): USBControlSetConnection
 	listUnifiedLoggingFilters(input: UnifiedLoggingFiltersListQueryInput): UnifiedLoggingFilterConnection
 	listUsers(input: UserQueryInput): UserConnection
 }

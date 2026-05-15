@@ -12,8 +12,10 @@ import (
 	"github.com/Jamf-Concepts/jamfprotect-go-sdk/internal/client"
 )
 
+// ── Query/Mutation constants ──────────────────────────────────────────────────
+
 const removableStorageControlSetFields = `
-fragment USBControlSetFields on USBControlSet {
+fragment RemovableStorageControlSetFields on USBControlSet {
 	id
 	name
 	description
@@ -23,19 +25,19 @@ fragment USBControlSetFields on USBControlSet {
 		mountAction
 		messageAction
 		type
-		... on VendorRule {
-			vendors
+		... on ProductRule {
+			products {
+				vendor
+				product
+			}
 			applyTo
 		}
 		... on SerialRule {
 			serials
 			applyTo
 		}
-		... on ProductRule {
-			products {
-			vendor
-			product
-		}
+		... on VendorRule {
+			vendors
 			applyTo
 		}
 	}
@@ -49,21 +51,11 @@ fragment USBControlSetFields on USBControlSet {
 `
 
 const createRemovableStorageControlSetMutation = `
-mutation createUSBControlSet(
-	$name: String!,
-	$description: String,
-	$defaultMountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!,
-	$defaultMessageAction: String,
-	$rules: [USBControlRuleInput!]!
-) {
-	createUSBControlSet(input: {
-		name: $name,
-		description: $description,
-		defaultMountAction: $defaultMountAction,
-		defaultMessageAction: $defaultMessageAction,
-		rules: $rules
-	}) {
-		...USBControlSetFields
+mutation createUSBControlSet($name: String!, $description: String, $defaultMountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!, $defaultMessageAction: String, $rules: [USBControlRuleInput!]!) {
+	createUSBControlSet(
+		input: {name: $name, description: $description, defaultMountAction: $defaultMountAction, defaultMessageAction: $defaultMessageAction, rules: $rules}
+	) {
+		...RemovableStorageControlSetFields
 	}
 }
 ` + removableStorageControlSetFields
@@ -71,28 +63,18 @@ mutation createUSBControlSet(
 const getRemovableStorageControlSetQuery = `
 query getUSBControlSet($id: ID!) {
 	getUSBControlSet(id: $id) {
-		...USBControlSetFields
+		...RemovableStorageControlSetFields
 	}
 }
 ` + removableStorageControlSetFields
 
 const updateRemovableStorageControlSetMutation = `
-mutation updateUSBControlSet(
-	$id: ID!,
-	$name: String!,
-	$description: String,
-	$defaultMountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!,
-	$defaultMessageAction: String,
-	$rules: [USBControlRuleInput!]!
-) {
-	updateUSBControlSet(id: $id, input: {
-		name: $name,
-		description: $description,
-		defaultMountAction: $defaultMountAction,
-		defaultMessageAction: $defaultMessageAction,
-		rules: $rules
-	}) {
-		...USBControlSetFields
+mutation updateUSBControlSet($id: ID!, $name: String!, $description: String, $defaultMountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!, $defaultMessageAction: String, $rules: [USBControlRuleInput!]!) {
+	updateUSBControlSet(
+		id: $id
+		input: {name: $name, description: $description, defaultMountAction: $defaultMountAction, defaultMessageAction: $defaultMessageAction, rules: $rules}
+	) {
+		...RemovableStorageControlSetFields
 	}
 }
 ` + removableStorageControlSetFields
@@ -106,12 +88,12 @@ mutation deleteUSBControlSet($id: ID!) {
 `
 
 const listRemovableStorageControlSetsQuery = `
-query listUSBControlSets($nextToken: String, $direction: OrderDirection!, $field: USBControlOrderField!) {
+query listUSBControlSets($nextToken: String, $direction: OrderDirection!, $field: USBControlOrderField!, $pageSize: Int) {
 	listUSBControlSets(
-		input: {next: $nextToken, order: {direction: $direction, field: $field}, pageSize: 100}
+		input: {next: $nextToken, order: {direction: $direction, field: $field}, pageSize: $pageSize}
 	) {
 		items {
-			...USBControlSetFields
+			...RemovableStorageControlSetFields
 		}
 		pageInfo {
 			next
@@ -121,7 +103,9 @@ query listUSBControlSets($nextToken: String, $direction: OrderDirection!, $field
 }
 ` + removableStorageControlSetFields
 
-// RemovableStorageControlSetInput represents a removable storage control set create/update payload.
+// ── Input types ───────────────────────────────────────────────────────────────
+
+// RemovableStorageControlSetInput is the input for removableStorageControlSet operations.
 type RemovableStorageControlSetInput struct {
 	Name                 string
 	Description          string
@@ -130,56 +114,77 @@ type RemovableStorageControlSetInput struct {
 	Rules                []RemovableStorageControlRuleInput
 }
 
-// RemovableStorageControlRuleInput represents a removable storage control rule input variant.
-type RemovableStorageControlRuleInput struct {
-	Type           string                                     `json:"type"`
-	VendorRule     *RemovableStorageControlRuleDetails        `json:"vendorRule,omitempty"`
-	SerialRule     *RemovableStorageControlRuleDetails        `json:"serialRule,omitempty"`
-	ProductRule    *RemovableStorageControlProductRuleDetails `json:"productRule,omitempty"`
-	EncryptionRule *RemovableStorageControlRuleDetails        `json:"encryptionRule,omitempty"`
+// EncryptionRuleInput is a nested input type.
+type EncryptionRuleInput struct {
+	MountAction   string `json:"mountAction"`
+	MessageAction string `json:"messageAction"`
 }
 
-// RemovableStorageControlRuleDetails represents shared rule fields.
-type RemovableStorageControlRuleDetails struct {
+// VendorRuleInput is a nested input type.
+type VendorRuleInput struct {
 	MountAction   string   `json:"mountAction"`
-	MessageAction *string  `json:"messageAction,omitempty"`
-	ApplyTo       *string  `json:"applyTo,omitempty"`
-	Vendors       []string `json:"vendors,omitempty"`
-	Serials       []string `json:"serials,omitempty"`
+	MessageAction string   `json:"messageAction"`
+	ApplyTo       string   `json:"applyTo"`
+	Vendors       []string `json:"vendors"`
 }
 
-// RemovableStorageControlProductRuleDetails represents product rule details.
-type RemovableStorageControlProductRuleDetails struct {
+// SerialRuleInput is a nested input type.
+type SerialRuleInput struct {
+	MountAction   string   `json:"mountAction"`
+	MessageAction string   `json:"messageAction"`
+	ApplyTo       string   `json:"applyTo"`
+	Serials       []string `json:"serials"`
+}
+
+// ProductValueInput is a nested input type.
+type ProductValueInput struct {
+	Vendor  string `json:"vendor"`
+	Product string `json:"product"`
+}
+
+// ProductRuleInput is a nested input type.
+type ProductRuleInput struct {
+	MountAction   string              `json:"mountAction"`
+	MessageAction string              `json:"messageAction"`
+	ApplyTo       string              `json:"applyTo"`
+	Products      []ProductValueInput `json:"products"`
+}
+
+// RemovableStorageControlRuleInput is a nested input type.
+type RemovableStorageControlRuleInput struct {
+	Type           string               `json:"type"`
+	EncryptionRule *EncryptionRuleInput `json:"encryptionRule"`
+	VendorRule     *VendorRuleInput     `json:"vendorRule"`
+	SerialRule     *SerialRuleInput     `json:"serialRule"`
+	ProductRule    *ProductRuleInput    `json:"productRule"`
+}
+
+// ── Response types ────────────────────────────────────────────────────────────
+
+// RemovableStorageControlRule contains USBControlRule data.
+type RemovableStorageControlRule struct {
 	MountAction   string                               `json:"mountAction"`
-	MessageAction *string                              `json:"messageAction,omitempty"`
-	ApplyTo       *string                              `json:"applyTo,omitempty"`
-	Products      []RemovableStorageControlProductPair `json:"products,omitempty"`
+	MessageAction string                               `json:"messageAction"`
+	Type          string                               `json:"type"`
+	Products      []RemovableStorageControlProductPair `json:"products"`
+	ApplyTo       string                               `json:"applyTo"`
+	Serials       []string                             `json:"serials"`
+	Vendors       []string                             `json:"vendors"`
 }
 
-// RemovableStorageControlProductPair represents a vendor+product pair.
+// RemovableStorageControlProductPair contains ProductValue data.
 type RemovableStorageControlProductPair struct {
 	Vendor  string `json:"vendor"`
 	Product string `json:"product"`
 }
 
-// RemovableStorageControlSetPlan represents a plan entry.
+// RemovableStorageControlSetPlan contains Plan data.
 type RemovableStorageControlSetPlan struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
-// RemovableStorageControlRule represents a removable storage control rule in API responses.
-type RemovableStorageControlRule struct {
-	Type          string                               `json:"type"`
-	MountAction   string                               `json:"mountAction"`
-	MessageAction string                               `json:"messageAction"`
-	ApplyTo       string                               `json:"applyTo"`
-	Vendors       []string                             `json:"vendors"`
-	Serials       []string                             `json:"serials"`
-	Products      []RemovableStorageControlProductPair `json:"products"`
-}
-
-// RemovableStorageControlSet represents a removable storage control set in API responses.
+// RemovableStorageControlSet represents a Jamf Protect removableStorageControlSet.
 type RemovableStorageControlSet struct {
 	ID                   string                           `json:"id"`
 	Name                 string                           `json:"name"`
@@ -192,15 +197,11 @@ type RemovableStorageControlSet struct {
 	Updated              string                           `json:"updated"`
 }
 
-// CreateRemovableStorageControlSet creates a new removable storage control set.
+// ── Client methods ────────────────────────────────────────────────────────────
+
+// CreateRemovableStorageControlSet creates a new removableStorageControlSet.
 func (c *Client) CreateRemovableStorageControlSet(ctx context.Context, input RemovableStorageControlSetInput) (RemovableStorageControlSet, error) {
-	vars := map[string]any{
-		"name":                 input.Name,
-		"description":          input.Description,
-		"defaultMountAction":   input.DefaultMountAction,
-		"defaultMessageAction": input.DefaultMessageAction,
-		"rules":                input.Rules,
-	}
+	vars := buildRemovableStorageControlSetVariables(input)
 	var result struct {
 		CreateRemovableStorageControlSet RemovableStorageControlSet `json:"createUSBControlSet"`
 	}
@@ -210,7 +211,7 @@ func (c *Client) CreateRemovableStorageControlSet(ctx context.Context, input Rem
 	return result.CreateRemovableStorageControlSet, nil
 }
 
-// GetRemovableStorageControlSet retrieves a removable storage control set by ID.
+// GetRemovableStorageControlSet retrieves a removableStorageControlSet by ID.
 func (c *Client) GetRemovableStorageControlSet(ctx context.Context, id string) (*RemovableStorageControlSet, error) {
 	vars := map[string]any{"id": id}
 	var result struct {
@@ -222,16 +223,10 @@ func (c *Client) GetRemovableStorageControlSet(ctx context.Context, id string) (
 	return result.GetRemovableStorageControlSet, nil
 }
 
-// UpdateRemovableStorageControlSet updates a removable storage control set by ID.
+// UpdateRemovableStorageControlSet updates an existing removableStorageControlSet.
 func (c *Client) UpdateRemovableStorageControlSet(ctx context.Context, id string, input RemovableStorageControlSetInput) (RemovableStorageControlSet, error) {
-	vars := map[string]any{
-		"id":                   id,
-		"name":                 input.Name,
-		"description":          input.Description,
-		"defaultMountAction":   input.DefaultMountAction,
-		"defaultMessageAction": input.DefaultMessageAction,
-		"rules":                input.Rules,
-	}
+	vars := buildRemovableStorageControlSetVariables(input)
+	vars["id"] = id
 	var result struct {
 		UpdateRemovableStorageControlSet RemovableStorageControlSet `json:"updateUSBControlSet"`
 	}
@@ -241,7 +236,7 @@ func (c *Client) UpdateRemovableStorageControlSet(ctx context.Context, id string
 	return result.UpdateRemovableStorageControlSet, nil
 }
 
-// DeleteRemovableStorageControlSet deletes a removable storage control set by ID.
+// DeleteRemovableStorageControlSet deletes a removableStorageControlSet by ID.
 func (c *Client) DeleteRemovableStorageControlSet(ctx context.Context, id string) error {
 	vars := map[string]any{"id": id}
 	if err := c.transport.DoGraphQL(ctx, "/app", deleteRemovableStorageControlSetMutation, vars, nil); err != nil {
@@ -250,14 +245,25 @@ func (c *Client) DeleteRemovableStorageControlSet(ctx context.Context, id string
 	return nil
 }
 
-// ListRemovableStorageControlSets returns all removable storage control sets.
+// ListRemovableStorageControlSets retrieves all removableStorageControlSets.
 func (c *Client) ListRemovableStorageControlSets(ctx context.Context) ([]RemovableStorageControlSet, error) {
-	items, err := client.ListAll[RemovableStorageControlSet](ctx, c.transport, "/app", listRemovableStorageControlSetsQuery, map[string]any{
+	removableStorageControlSets, err := client.ListAll[RemovableStorageControlSet](ctx, c.transport, "/app", listRemovableStorageControlSetsQuery, map[string]any{
 		"direction": "ASC",
 		"field":     "created",
+		"pageSize":  100,
 	}, "listUSBControlSets")
 	if err != nil {
 		return nil, fmt.Errorf("ListRemovableStorageControlSets: %w", err)
 	}
-	return items, nil
+	return removableStorageControlSets, nil
+}
+
+func buildRemovableStorageControlSetVariables(input RemovableStorageControlSetInput) map[string]any {
+	return map[string]any{
+		"name":                 input.Name,
+		"description":          input.Description,
+		"defaultMountAction":   input.DefaultMountAction,
+		"defaultMessageAction": input.DefaultMessageAction,
+		"rules":                input.Rules,
+	}
 }

@@ -210,6 +210,24 @@ func buildFragment(schema *ast.Schema, res ResourceConfig, nestedFieldLists map[
 		base := baseTypeName(f.Type)
 		fieldDef := schema.Types[base]
 		directive := res.DirectiveFields[fieldName]
+
+		// Interface fields with explicit union config emit inline fragments.
+		if fieldDef != nil && fieldDef.Kind == ast.Interface {
+			if uf, ok := res.UnionFields[fieldName]; ok {
+				b.WriteString("\t" + fieldName + " {\n")
+				for _, cf := range uf.Common {
+					b.WriteString("\t\t" + cf + "\n")
+				}
+				for _, typeName := range sortedStringKeys(uf.Variants) {
+					b.WriteString("\t\t... on " + typeName + " {\n")
+					writeFragmentSubFields(schema, typeName, uf.Variants[typeName], nil, nestedFieldLists, nestedDirectives, pathOverrides, fieldName, 3, &b)
+					b.WriteString("\t\t}\n")
+				}
+				b.WriteString("\t}\n")
+				continue
+			}
+		}
+
 		if fieldDef != nil && (fieldDef.Kind == ast.Object || fieldDef.Kind == ast.Interface) {
 			if directive != "" {
 				b.WriteString("\t" + fieldName + " " + directive + " {\n")
@@ -319,6 +337,7 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 	}
 	var queue []queueItem
 	var mainFields []IRField
+	var nestedTypes []IRStruct
 
 	for _, fieldName := range res.Fields {
 		f := def.Fields.ForName(fieldName)
@@ -326,6 +345,50 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 			return IRStruct{}, nil, fmt.Errorf("field %q not on type %s", fieldName, schemaTypeName)
 		}
 		base := baseTypeName(f.Type)
+		fieldDef := schema.Types[base]
+
+		// Interface fields with explicit union config build a merged flat struct.
+		if fieldDef != nil && fieldDef.Kind == ast.Interface {
+			if uf, ok := res.UnionFields[fieldName]; ok {
+				var unionGoType string
+				if f.Type.Elem != nil {
+					unionGoType = "[]" + uf.GoStruct
+				} else if !f.Type.NonNull {
+					unionGoType = "*" + uf.GoStruct
+				} else {
+					unionGoType = uf.GoStruct
+				}
+				if nullableResponseFields[fieldName] {
+					unionGoType = ensurePointer(unionGoType)
+				}
+				mainFields = append(mainFields, IRField{
+					Name:    toPascalCase(fieldName),
+					JSONTag: fieldName,
+					Type:    unionGoType,
+				})
+				if !seenNested[base] {
+					seenNested[base] = true
+					mergedStruct, subObjectBases, mergeErr := buildUnionMergedStruct(schema, fieldDef, uf, scalars, nestedGoNames)
+					if mergeErr != nil {
+						return IRStruct{}, nil, fmt.Errorf("union field %q: %w", fieldName, mergeErr)
+					}
+					nestedTypes = append(nestedTypes, mergedStruct)
+					for _, subBase := range subObjectBases {
+						if seenNested[subBase] {
+							continue
+						}
+						seenNested[subBase] = true
+						subGoName := subBase
+						if o, ok := nestedGoNames[subBase]; ok {
+							subGoName = o
+						}
+						queue = append(queue, queueItem{subBase, subGoName, fieldName + "." + subBase, false})
+					}
+				}
+				continue
+			}
+		}
+
 		// Check for path-based override first.
 		var goType string
 		if override, ok := pathOverrides[fieldName]; ok {
@@ -342,7 +405,6 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 			Type:    goType,
 		})
 
-		fieldDef := schema.Types[base]
 		if fieldDef != nil && (fieldDef.Kind == ast.Object || fieldDef.Kind == ast.Interface) {
 			if override, ok := pathOverrides[fieldName]; ok {
 				if !seenPaths[fieldName] {
@@ -361,7 +423,6 @@ func buildResponseTypes(schema *ast.Schema, res ResourceConfig, nestedGoNames ma
 	}
 
 	// BFS: generate each nested struct and enqueue its own Object sub-fields.
-	var nestedTypes []IRStruct
 	for len(queue) > 0 {
 		item := queue[0]
 		queue = queue[1:]
@@ -1727,6 +1788,71 @@ func formatGoLiteral(v any) string {
 	default:
 		return fmt.Sprintf("%v", val)
 	}
+}
+
+// buildUnionMergedStruct builds a merged flat IRStruct from a GraphQL interface type's common
+// fields plus all variant-specific fields listed in uf. Returns the struct and a slice of
+// sub-object base type names that should be enqueued for BFS expansion.
+func buildUnionMergedStruct(schema *ast.Schema, interfaceDef *ast.Definition, uf UnionFieldConfig, scalars map[string]string, nestedOverrides map[string]string) (IRStruct, []string, error) {
+	seen := make(map[string]bool)
+	var fields []IRField
+	var subObjectBases []string
+
+	addField := func(fDef *ast.Definition, fName string) error {
+		f := fDef.Fields.ForName(fName)
+		if f == nil {
+			return fmt.Errorf("field %q not on type %s", fName, fDef.Name)
+		}
+		goType := resolveGoType(f.Type, schema, scalars, nestedOverrides)
+		fields = append(fields, IRField{Name: toPascalCase(fName), JSONTag: fName, Type: goType})
+		base := baseTypeName(f.Type)
+		if childDef := schema.Types[base]; childDef != nil && (childDef.Kind == ast.Object || childDef.Kind == ast.Interface) {
+			subObjectBases = append(subObjectBases, base)
+		}
+		return nil
+	}
+
+	for _, fName := range uf.Common {
+		if seen[fName] {
+			continue
+		}
+		seen[fName] = true
+		if err := addField(interfaceDef, fName); err != nil {
+			return IRStruct{}, nil, fmt.Errorf("common %w", err)
+		}
+	}
+
+	for _, typeName := range sortedStringKeys(uf.Variants) {
+		variantDef := schema.Types[typeName]
+		if variantDef == nil {
+			return IRStruct{}, nil, fmt.Errorf("variant type %q not found in schema", typeName)
+		}
+		for _, fName := range uf.Variants[typeName] {
+			if seen[fName] {
+				continue
+			}
+			seen[fName] = true
+			if err := addField(variantDef, fName); err != nil {
+				return IRStruct{}, nil, fmt.Errorf("variant %s: %w", typeName, err)
+			}
+		}
+	}
+
+	return IRStruct{
+		Comment: fmt.Sprintf("// %s contains %s data.", uf.GoStruct, interfaceDef.Name),
+		Name:    uf.GoStruct,
+		Fields:  fields,
+	}, subObjectBases, nil
+}
+
+// sortedStringKeys returns the keys of a map[string][]string in sorted order.
+func sortedStringKeys(m map[string][]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // zeroVal returns the correct Go zero-value expression for a return type.
