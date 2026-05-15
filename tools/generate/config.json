@@ -495,7 +495,7 @@
         {"schemaName": "AnalyticContext", "goName": "AnalyticContext"}
       ],
       "nullableInputFields": ["startup"],
-      "optionalInputFields": ["label", "longDescription", "startup", "remediation", "matchReason"],
+      "optionalInputFields": ["label", "longDescription", "startup", "remediation", "matchReason", "tenantActions", "tenantSeverity"],
       "inputTypeRenames": {
         "AnalyticActionsInput": "AnalyticActionInput"
       },
@@ -890,6 +890,27 @@
           "listItemFields": ["uuid", "name", "managed"]
         }
       ]
+    },
+    {
+      "file": "audit_log.go",
+      "typeName": "AuditLog",
+      "fields": ["resourceId", "date", "args", "error", "ips", "op", "user"],
+      "nullableResponseFields": ["error"],
+      "operations": [
+        {
+          "name": "ListAuditLogsByDate",
+          "gqlName": "listAuditLogsByDate",
+          "kind": "date_paginated",
+          "endpoint": "/app",
+          "resultKey": "listAuditLogsByDate"
+        }
+      ]
+    }
+  ],
+  "statics": [
+    {
+      "source": "_static/audit_log_helpers.go",
+      "dest": "audit_log_helpers.go"
     }
   ]
 }

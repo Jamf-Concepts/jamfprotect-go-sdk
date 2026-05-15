@@ -84,6 +84,7 @@ type BuildVar struct {
 	GoAccess string // Go field name on the input struct, e.g. "ReadResources"
 	Optional bool   // if true, only include when non-zero
 	IsPtr    bool   // if true, dereference with *input.X (only meaningful when Optional)
+	IsSlice  bool   // if true, use != nil check instead of != "" (only meaningful when Optional)
 }
 
 func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, error) {
@@ -595,6 +596,7 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 				GoAccess: goName,
 				Optional: isOptional,
 				IsPtr:    isOptional && strings.HasPrefix(goType, "*"),
+				IsSlice:  isOptional && strings.HasPrefix(goType, "[]"),
 			})
 		}
 
@@ -728,6 +730,8 @@ func buildVarsFuncBody(vars []BuildVar) string {
 	for _, v := range optional {
 		if v.IsPtr {
 			fmt.Fprintf(&b, "\tif input.%s != nil {\n\t\tvars[%q] = *input.%s\n\t}\n", v.GoAccess, v.Key, v.GoAccess)
+		} else if v.IsSlice {
+			fmt.Fprintf(&b, "\tif input.%s != nil {\n\t\tvars[%q] = input.%s\n\t}\n", v.GoAccess, v.Key, v.GoAccess)
 		} else {
 			fmt.Fprintf(&b, "\tif input.%s != \"\" {\n\t\tvars[%q] = input.%s\n\t}\n", v.GoAccess, v.Key, v.GoAccess)
 		}

@@ -42,4 +42,13 @@ func main() {
 		}
 		log.Printf("generated %s", outPath)
 	}
+
+	for _, s := range cfg.Statics {
+		srcPath := filepath.Join(base, s.Source)
+		dstPath := filepath.Join(outputDir, s.Dest)
+		if err := emitStatic(srcPath, dstPath); err != nil {
+			log.Fatalf("emit static %s: %v", s.Dest, err)
+		}
+		log.Printf("static %s", dstPath)
+	}
 }
