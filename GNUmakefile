@@ -10,6 +10,10 @@ generate:
 	cd tools/generate; go run .
 	cd tools; go generate ./...
 
+fix:
+	go fix ./...
+	cd tools/generate; go fix ./...
+
 fmt:
 	gofmt -s -w -e .
 
@@ -22,4 +26,4 @@ testacc:
 vet:
 	go vet ./...
 
-.PHONY: fmt lint test testacc build generate vet
+.PHONY: fmt fix lint test testacc build generate vet
