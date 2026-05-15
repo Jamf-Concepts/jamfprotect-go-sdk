@@ -46,16 +46,18 @@ func loadSchema(path string) (*ast.Schema, error) {
 var goInitialisms = map[string]bool{
 	"id": true, "url": true, "uri": true, "http": true, "https": true,
 	"api": true, "json": true, "xml": true, "sql": true, "uuid": true, "html": true,
+	"ip": true, "os": true,
 }
 
 // goCustomCasing handles plural/mixed initialisms that aren't pure uppercase (e.g. "ids" → "IDs").
 var goCustomCasing = map[string]string{
-	"ids":   "IDs",
-	"uuids": "UUIDs",
-	"ips":   "IPs",
-	"pppc":  "PPPC",
-	"csr":   "CSR",
-	"ngtp":  "NGTP",
+	"ids":    "IDs",
+	"uuids":  "UUIDs",
+	"ips":    "IPs",
+	"pppc":   "PPPC",
+	"csr":    "CSR",
+	"ngtp":   "NGTP",
+	"certid": "CertID",
 }
 
 // toPascalCase converts a camelCase identifier to Go PascalCase,

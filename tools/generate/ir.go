@@ -1549,8 +1549,8 @@ func buildSingletonUpdateBody(op OperationConfig, returnType, resultKey, endpoin
 	baseLit := "map[string]any{" + strings.Join(parts, ", ") + "}"
 	varAssign := mergeVarsExpr(baseLit, buildMapLit(extraVarValues), rbacMap)
 	return fmt.Sprintf(
-		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
-		varAssign, toPascalCase(resultKey), returnType, tag, endpoint, constName, returnType, op.Name, toPascalCase(resultKey))
+		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
+		varAssign, toPascalCase(resultKey), returnType, tag, endpoint, constName, zeroVal(returnType), op.Name, toPascalCase(resultKey))
 }
 
 func buildUpdateInlineBody(op OperationConfig, returnType, resultKey, endpoint, constName, rbacMap string, extraVarValues map[string]any) string {
@@ -1569,8 +1569,8 @@ func buildUpdateInlineBody(op OperationConfig, returnType, resultKey, endpoint, 
 		idArg = "id"
 	}
 	return fmt.Sprintf(
-		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s(%%s): %%w\", %s, err)\n\t}\n\treturn result.%s, nil",
-		varAssign, toPascalCase(resultKey), returnType, tag, endpoint, constName, returnType, op.Name, idArg, toPascalCase(resultKey))
+		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s(%%s): %%w\", %s, err)\n\t}\n\treturn result.%s, nil",
+		varAssign, toPascalCase(resultKey), returnType, tag, endpoint, constName, zeroVal(returnType), op.Name, idArg, toPascalCase(resultKey))
 }
 
 func buildDatePaginatedBody(methodName, returnType, resultKey, endpoint, constName, argName, dateType string) string {
@@ -1611,8 +1611,8 @@ func buildCreateBody(methodName, returnType, resultKey, endpoint, constName, bui
 	}
 	varAssign := mergeVarsExpr(baseLit, buildMapLit(extraVarValues), rbacMap)
 	return fmt.Sprintf(
-		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
-		varAssign, methodName, returnType, tag, endpoint, constName, returnType, methodName, methodName)
+		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s, nil",
+		varAssign, methodName, returnType, tag, endpoint, constName, zeroVal(returnType), methodName, methodName)
 }
 
 func buildUpdateBody(methodName, returnType, resultKey, endpoint, constName, buildFn, idField, rbacMap string, wrappedInput bool, extraVarValues map[string]any) string {
@@ -1627,8 +1627,8 @@ func buildUpdateBody(methodName, returnType, resultKey, endpoint, constName, bui
 		varLines = assign + "\n\tvars[" + fmt.Sprintf("%q", idField) + "] = " + idField
 	}
 	return fmt.Sprintf(
-		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s{}, fmt.Errorf(\"%s(%%s): %%w\", %s, err)\n\t}\n\treturn result.%s, nil",
-		varLines, methodName, returnType, tag, endpoint, constName, returnType, methodName, idField, methodName)
+		"%s\n\tvar result struct {\n\t\t%s %s %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s(%%s): %%w\", %s, err)\n\t}\n\treturn result.%s, nil",
+		varLines, methodName, returnType, tag, endpoint, constName, zeroVal(returnType), methodName, idField, methodName)
 }
 
 func buildDeleteBody(methodName, endpoint, constName, idField string) string {
@@ -1720,7 +1720,21 @@ func formatGoLiteral(v any) string {
 			return "map[string]any{}"
 		}
 		return fmt.Sprintf("%v", val)
+	case []interface{}:
+		parts := make([]string, len(val))
+		for i, elem := range val {
+			parts[i] = formatGoLiteral(elem)
+		}
+		return "[]any{" + strings.Join(parts, ", ") + "}"
 	default:
 		return fmt.Sprintf("%v", val)
 	}
+}
+
+// zeroVal returns the correct Go zero-value expression for a return type.
+func zeroVal(t string) string {
+	if strings.HasPrefix(t, "*") || strings.HasPrefix(t, "[]") {
+		return "nil"
+	}
+	return t + "{}"
 }

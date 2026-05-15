@@ -90,7 +90,7 @@ type InsightInput struct {
 
 // InsightCisID contains CisId data.
 type InsightCisID struct {
-	OsVersion string `json:"osVersion"`
+	OSVersion string `json:"osVersion"`
 	ID        string `json:"id"`
 }
 
