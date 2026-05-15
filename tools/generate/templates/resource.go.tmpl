@@ -14,9 +14,9 @@ import (
 )
 
 // ── Query/Mutation constants ──────────────────────────────────────────────────
-
+{{if not .NoMainFragment}}
 const {{.FragConst}} = `{{.Fragment}}`
-{{range .Operations}}
+{{end}}{{range .Operations}}
 {{- if .FragConst}}
 const {{.ConstName}} = `{{.QueryStr}}` + {{.FragConst}}
 {{- else}}

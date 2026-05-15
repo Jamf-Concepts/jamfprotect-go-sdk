@@ -10,6 +10,8 @@ import (
 	"fmt"
 )
 
+// ── Query/Mutation constants ──────────────────────────────────────────────────
+
 const getCountQuery = `
 query getCount($input: CountQueryInput) {
 	getCount(input: $input) {
@@ -47,7 +49,30 @@ query listRiskiestComputers($createdInterval: String, $limit: Int) {
 }
 `
 
-// CountResponse holds aggregated counts for the Jamf Protect instance.
+// ── Input types ───────────────────────────────────────────────────────────────
+
+// ── Response types ────────────────────────────────────────────────────────────
+
+// RiskyComputer contains RiskyComputer data.
+type RiskyComputer struct {
+	Computer    *RiskyComputerRef     `json:"computer"`
+	AlertCounts []RiskyComputerAlerts `json:"alertCounts"`
+}
+
+// RiskyComputerRef contains Computer data.
+type RiskyComputerRef struct {
+	UUID     string `json:"uuid"`
+	HostName string `json:"hostName"`
+	Serial   string `json:"serial"`
+}
+
+// RiskyComputerAlerts contains AlertCount data.
+type RiskyComputerAlerts struct {
+	Severity string `json:"severity"`
+	Count    int64  `json:"count"`
+}
+
+// CountResponse represents a Jamf Protect countResponse.
 type CountResponse struct {
 	Computers         *int64 `json:"computers"`
 	Alerts            *int64 `json:"alerts"`
@@ -55,39 +80,11 @@ type CountResponse struct {
 	InsightsComputers *int64 `json:"insightsComputers"`
 }
 
-// RiskyComputer represents a computer ranked by alert risk.
-type RiskyComputer struct {
-	Computer    RiskyComputerRef      `json:"computer"`
-	AlertCounts []RiskyComputerAlerts `json:"alertCounts"`
-}
+// ── Client methods ────────────────────────────────────────────────────────────
 
-// RiskyComputerRef is a lightweight computer reference on a risky computer entry.
-type RiskyComputerRef struct {
-	UUID     string `json:"uuid"`
-	HostName string `json:"hostName"`
-	Serial   string `json:"serial"`
-}
-
-// RiskyComputerAlerts holds alert counts by severity for a risky computer.
-type RiskyComputerAlerts struct {
-	Severity string `json:"severity"`
-	Count    int64  `json:"count"`
-}
-
-// GetCount returns aggregated counts of computers, alerts, and insights computers.
-// Each CountQueryInput field must contain a filter with at least one populated key for
-// the server to return its corresponding count; empty objects and nulls yield null.
-// {or: []} is the canonical "match everything" filter accepted by the server.
+// GetCount retrieves the countResponse.
 func (c *Client) GetCount(ctx context.Context) (CountResponse, error) {
-	matchAll := map[string]any{"or": []any{}}
-	vars := map[string]any{
-		"input": map[string]any{
-			"computers":         matchAll,
-			"alerts":            matchAll,
-			"alertsComputers":   matchAll,
-			"insightsComputers": matchAll,
-		},
-	}
+	vars := map[string]any{"input": map[string]any{"alerts": map[string]any{"or": []any{}}, "alertsComputers": map[string]any{"or": []any{}}, "computers": map[string]any{"or": []any{}}, "insightsComputers": map[string]any{"or": []any{}}}}
 	var result struct {
 		GetCount CountResponse `json:"getCount"`
 	}
@@ -97,7 +94,7 @@ func (c *Client) GetCount(ctx context.Context) (CountResponse, error) {
 	return result.GetCount, nil
 }
 
-// GetComputerCount returns the total number of computers.
+// GetComputerCount retrieves the int64.
 func (c *Client) GetComputerCount(ctx context.Context) (int64, error) {
 	var result struct {
 		GetComputerCount struct {
@@ -110,9 +107,7 @@ func (c *Client) GetComputerCount(ctx context.Context) (int64, error) {
 	return result.GetComputerCount.Computers, nil
 }
 
-// ListRiskiestComputers returns computers ranked by alert risk.
-// Pass 0 for limit to use the API default. The createdInterval filters alerts
-// by age (e.g. "7d" for 7 days, "30d" for 30 days).
+// ListRiskiestComputers retrieves riskyComputers filtered by the given args.
 func (c *Client) ListRiskiestComputers(ctx context.Context, limit int, createdInterval string) ([]RiskyComputer, error) {
 	vars := map[string]any{}
 	if limit > 0 {

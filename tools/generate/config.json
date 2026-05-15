@@ -1394,16 +1394,74 @@
           ]
         }
       ]
+    },
+    {
+      "file": "dashboard.go",
+      "typeName": "CountResponse",
+      "fields": ["computers", "alerts", "alertsComputers", "insightsComputers"],
+      "nullableResponseFields": ["computers", "alerts", "alertsComputers", "insightsComputers"],
+      "nestedTypes": [
+        {"schemaName": "Computer", "goName": "RiskyComputerRef", "fields": ["uuid", "hostName", "serial"]},
+        {"schemaName": "AlertCount", "goName": "RiskyComputerAlerts", "fields": ["severity", "count"]}
+      ],
+      "extraResponseTypes": [
+        {"goName": "RiskyComputer", "schemaName": "RiskyComputer", "fields": ["computer", "alertCounts"]},
+        {"goName": "RiskyComputerRef", "schemaName": "Computer", "fields": ["uuid", "hostName", "serial"]},
+        {"goName": "RiskyComputerAlerts", "schemaName": "AlertCount", "fields": ["severity", "count"]}
+      ],
+      "operations": [
+        {
+          "name": "GetCount",
+          "gqlName": "getCount",
+          "kind": "singleton_get",
+          "endpoint": "/app",
+          "resultKey": "getCount",
+          "returnNullable": false,
+          "noFragment": true,
+          "inlineFields": ["computers", "alerts", "alertsComputers", "insightsComputers"],
+          "gqlVars": {"input": "CountQueryInput"},
+          "fieldArgs": "input: $input",
+          "extraVarValues": {
+            "input": {
+              "computers": {"or": []},
+              "alerts": {"or": []},
+              "alertsComputers": {"or": []},
+              "insightsComputers": {"or": []}
+            }
+          }
+        },
+        {
+          "name": "GetComputerCount",
+          "gqlName": "getComputerCount",
+          "kind": "singleton_get",
+          "endpoint": "/app",
+          "resultKey": "getComputerCount",
+          "returnType": "int64",
+          "returnNullable": false,
+          "noFragment": true,
+          "resultPath": "getComputerCount.computers",
+          "resultPathLeaf": true
+        },
+        {
+          "name": "ListRiskiestComputers",
+          "gqlName": "listRiskiestComputers",
+          "kind": "list_items",
+          "endpoint": "/app",
+          "resultKey": "listRiskiestComputers",
+          "returnType": "RiskyComputer",
+          "noFragment": true,
+          "inlineArgs": [
+            {"name": "limit", "goType": "int", "gqlVar": "limit", "gqlType": "Int", "isOptional": true},
+            {"name": "createdInterval", "goType": "string", "gqlVar": "createdInterval", "gqlType": "String", "isOptional": true}
+          ]
+        }
+      ]
     }
   ],
   "statics": [
     {
       "source": "_static/audit_log_helpers.go",
       "dest": "audit_log_helpers.go"
-    },
-    {
-      "source": "_static/dashboard.go",
-      "dest": "dashboard.go"
     },
     {
       "source": "_static/rbac.go",

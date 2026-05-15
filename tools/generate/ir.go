@@ -29,6 +29,7 @@ type IRResource struct {
 	TypedEnums     []IRTypedEnum
 	NeedClient     bool   // true when any operation uses client.ListAll
 	ExtraTopLevel  string // raw Go code emitted after main type, before client methods
+	NoMainFragment bool   // true when no operation references the main type's fragment (suppresses the unused fragment const)
 }
 
 // IRTypedEnum is a typed string alias with named constants.
@@ -147,7 +148,7 @@ func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, er
 		return IRResource{}, fmt.Errorf("input types: %w", err)
 	}
 
-	ops, err := buildOperations(schema, res, fragConst, cfg.Scalars)
+	ops, err := buildOperations(schema, res, fragConst, cfg.Scalars, nestedFieldLists, nestedDirectives, pathOverrides)
 	if err != nil {
 		return IRResource{}, fmt.Errorf("operations: %w", err)
 	}
@@ -156,6 +157,13 @@ func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, er
 	for _, op := range ops {
 		if op.Pagination {
 			needClient = true
+			break
+		}
+	}
+	noMainFragment := true
+	for _, op := range ops {
+		if op.FragConst != "" {
+			noMainFragment = false
 			break
 		}
 	}
@@ -192,6 +200,7 @@ func buildIR(cfg Config, schema *ast.Schema, res ResourceConfig) (IRResource, er
 		TypedEnums:     typedEnums,
 		NeedClient:     needClient,
 		ExtraTopLevel:  res.ExtraTopLevel,
+		NoMainFragment: noMainFragment,
 	}, nil
 }
 
@@ -936,10 +945,10 @@ func buildVarsFuncBody(vars []BuildVar) string {
 	return b.String()
 }
 
-func buildOperations(schema *ast.Schema, res ResourceConfig, fragConst string, scalars map[string]string) ([]IROperation, error) {
+func buildOperations(schema *ast.Schema, res ResourceConfig, fragConst string, scalars map[string]string, nestedFieldLists map[string][]string, nestedDirectives map[string]map[string]string, pathOverrides map[string]NestedTypeConfig) ([]IROperation, error) {
 	var ops []IROperation
 	for _, opCfg := range res.Operations {
-		op, err := buildOperation(schema, res, opCfg, fragConst, scalars)
+		op, err := buildOperation(schema, res, opCfg, fragConst, scalars, nestedFieldLists, nestedDirectives, pathOverrides)
 		if err != nil {
 			return nil, fmt.Errorf("op %s: %w", opCfg.Name, err)
 		}
@@ -948,7 +957,7 @@ func buildOperations(schema *ast.Schema, res ResourceConfig, fragConst string, s
 	return ops, nil
 }
 
-func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, fragConst string, scalars map[string]string) (IROperation, error) {
+func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, fragConst string, scalars map[string]string, nestedFieldLists map[string][]string, nestedDirectives map[string]map[string]string, pathOverrides map[string]NestedTypeConfig) (IROperation, error) {
 	gqlName := op.GQLName
 	if gqlName == "" {
 		gqlName = lcFirst(op.Name)
@@ -1003,7 +1012,7 @@ func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, 
 	}
 	constName := lcFirst(op.Name) + suffix
 
-	queryStr, err := buildQueryStr(schema, op, res, gqlName, kind)
+	queryStr, err := buildQueryStr(schema, op, res, gqlName, kind, nestedFieldLists, nestedDirectives, pathOverrides)
 	if err != nil {
 		return IROperation{}, err
 	}
@@ -1060,7 +1069,7 @@ func extraVarDeclStr(extraVars map[string]string) string {
 	return strings.Join(parts, ", ")
 }
 
-func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, gqlName, kind string) (string, error) {
+func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, gqlName, kind string, nestedFieldLists map[string][]string, nestedDirectives map[string]map[string]string, pathOverrides map[string]NestedTypeConfig) (string, error) {
 	fragRef := "..." + res.TypeName + "Fields"
 	idField := res.IDField
 	if idField == "" {
@@ -1147,6 +1156,15 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		if op.InputType != "" && op.WrappedInput {
 			allVarDecls = append(allVarDecls, "$input: "+op.InputType)
 		}
+		// GQLVars: extra var declarations with no Go-arg counterpart (values come from ExtraVarValues).
+		gqlVarKeys := make([]string, 0, len(op.GQLVars))
+		for k := range op.GQLVars {
+			gqlVarKeys = append(gqlVarKeys, k)
+		}
+		sort.Strings(gqlVarKeys)
+		for _, k := range gqlVarKeys {
+			allVarDecls = append(allVarDecls, "$"+k+": "+op.GQLVars[k])
+		}
 		varDecls := ""
 		if len(allVarDecls) > 0 {
 			varDecls = "(" + strings.Join(allVarDecls, ", ") + ")"
@@ -1159,6 +1177,19 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		// NoSelection: scalar return — emit the field call with no selection set.
 		if op.NoSelection {
 			return fmt.Sprintf("\nquery %s%s {\n\t%s\n}\n", gqlName, varDecls, fieldCallRef), nil
+		}
+		// ResultPathLeaf: the last segment of ResultPath is a scalar leaf field — emit
+		// nested object wrappers for all but the last, then the leaf as a plain field.
+		if op.ResultPathLeaf && op.ResultPath != "" {
+			parts := strings.Split(op.ResultPath, ".")
+			cur := parts[len(parts)-1]
+			for i := len(parts) - 2; i >= 0; i-- {
+				depth := i + 1
+				inner := strings.Repeat("\t", depth+1)
+				outer := strings.Repeat("\t", depth)
+				cur = fmt.Sprintf("%s {\n%s%s\n%s}", parts[i], inner, cur, outer)
+			}
+			return fmt.Sprintf("\nquery %s%s {\n\t%s\n}\n", gqlName, varDecls, cur), nil
 		}
 		// Wrap nested-result paths around the bodySelection.
 		body := wrapResultPath(op.ResultPath, fieldCallRef, bodySelection)
@@ -1178,6 +1209,26 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 		// Top-level list returning [T] directly (no items/pageInfo wrapper, no pagination).
 		// e.g. listInsights returns [Insight] directly.
 		return fmt.Sprintf("\nquery %s {\n\t%s {\n\t\t%s\n\t}\n}\n", gqlName, gqlName, bodySelection), nil
+
+	case "list_items":
+		// Non-paginated list with {items: [T]} wrapper. Inline args are passed as an inline
+		// input literal {arg1: $arg1, arg2: $arg2, ...}. No pageInfo, no client.ListAll.
+		// When no inlineFields are configured, auto-derive bodySelection from an
+		// extraResponseType matching ReturnType (so list_items can return a non-main type).
+		itemsBody := bodySelection
+		if len(op.InlineFields) == 0 && op.ReturnType != "" && op.ReturnType != res.TypeName {
+			for _, ert := range res.ExtraResponseTypes {
+				if ert.GoName != op.ReturnType {
+					continue
+				}
+				var b strings.Builder
+				writeFragmentSubFields(schema, ert.SchemaName, ert.Fields, nil, nestedFieldLists, nestedDirectives, pathOverrides, "", 3, &b, res.UnionFields)
+				itemsBody = strings.TrimRight(b.String(), "\n")
+				itemsBody = strings.TrimLeft(itemsBody, "\t")
+				break
+			}
+		}
+		return buildListItemsStr(op, gqlName, itemsBody, extraDecls), nil
 
 	case "mutation_list":
 		// Mutation returning {items: [T]}. Build like create, but wrap in items.
@@ -1617,6 +1668,41 @@ func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginati
 	), nil
 }
 
+// buildListItemsStr builds a query for list_items: field(input: {a: $a, b: $b}) { items { body } }.
+// Var decls and inline input args are emitted in alphabetical order by GQL var name.
+func buildListItemsStr(op OperationConfig, gqlName, bodySelection, extraDecls string) string {
+	argsByVar := make(map[string]InlineArg, len(op.InlineArgs))
+	keys := make([]string, 0, len(op.InlineArgs))
+	for _, a := range op.InlineArgs {
+		argsByVar[a.GQLVar] = a
+		keys = append(keys, a.GQLVar)
+	}
+	sort.Strings(keys)
+	varDecls := make([]string, 0, len(keys))
+	inputParts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		a := argsByVar[k]
+		varDecls = append(varDecls, "$"+a.GQLVar+": "+a.GQLType)
+		inputParts = append(inputParts, a.GQLVar+": $"+a.GQLVar)
+	}
+	vars := strings.Join(varDecls, ", ")
+	if extraDecls != "" {
+		if vars != "" {
+			vars += ", "
+		}
+		vars += extraDecls
+	}
+	varSig := ""
+	if vars != "" {
+		varSig = "(" + vars + ")"
+	}
+	fieldCall := gqlName
+	if len(inputParts) > 0 {
+		fieldCall = gqlName + "(input: {" + strings.Join(inputParts, ", ") + "})"
+	}
+	return fmt.Sprintf("\nquery %s%s {\n\t%s {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t}\n}\n", gqlName, varSig, fieldCall, bodySelection)
+}
+
 func buildSimpleListStr(gqlName, fragRef string) string {
 	return fmt.Sprintf("\nquery %s {\n\t%s {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t}\n}\n", gqlName, gqlName, fragRef)
 }
@@ -1700,6 +1786,16 @@ func buildMethodParts(op OperationConfig, kind, endpoint, returnType string, ret
 		sig = fmt.Sprintf("(ctx context.Context) ([]%s, error)", returnType)
 		doc = fmt.Sprintf("// %s retrieves all %ss.", op.Name, lcFirst(returnType))
 		body = buildListSimpleTopLevelBody(op.Name, returnType, resultKey, endpoint, constName)
+
+	case "list_items":
+		if len(op.InlineArgs) > 0 {
+			sigStr, _ := inlineArgsSignature(op.InlineArgs)
+			sig = fmt.Sprintf("(ctx context.Context%s) ([]%s, error)", sigStr, returnType)
+		} else {
+			sig = fmt.Sprintf("(ctx context.Context) ([]%s, error)", returnType)
+		}
+		doc = fmt.Sprintf("// %s retrieves %ss filtered by the given args.", op.Name, lcFirst(returnType))
+		body = buildListItemsBody(op, returnType, resultKey, endpoint, constName)
 
 	case "mutation_list":
 		goInputName := op.InputType
@@ -1910,6 +2006,81 @@ func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constNam
 	}
 	fmt.Fprintf(&b, "\treturn %s, nil", accessor.String())
 	return b.String()
+}
+
+// buildListItemsBody emits the method body for a list_items op:
+// builds vars from inline args (optional ones included only when non-zero), unwraps
+// {items: []T} from the response, returns the slice.
+func buildListItemsBody(op OperationConfig, returnType, resultKey, endpoint, constName string) string {
+	var sb strings.Builder
+	hasOptional := false
+	hasRequired := false
+	for _, a := range op.InlineArgs {
+		if a.IsOptional {
+			hasOptional = true
+		} else {
+			hasRequired = true
+		}
+	}
+	if hasOptional && !hasRequired {
+		sb.WriteString("vars := map[string]any{}\n\t")
+		for _, a := range op.InlineArgs {
+			fmt.Fprintf(&sb, "if %s {\n\t\tvars[%q] = %s\n\t}\n\t", inlineArgZeroCheck(a), a.GQLVar, a.Name)
+		}
+	} else if hasRequired && !hasOptional {
+		sb.WriteString("vars := map[string]any{")
+		for i, a := range op.InlineArgs {
+			if i > 0 {
+				sb.WriteString(", ")
+			}
+			fmt.Fprintf(&sb, "%q: %s", a.GQLVar, a.Name)
+		}
+		sb.WriteString("}\n\t")
+	} else if hasOptional && hasRequired {
+		sb.WriteString("vars := map[string]any{")
+		first := true
+		for _, a := range op.InlineArgs {
+			if a.IsOptional {
+				continue
+			}
+			if !first {
+				sb.WriteString(", ")
+			}
+			first = false
+			fmt.Fprintf(&sb, "%q: %s", a.GQLVar, a.Name)
+		}
+		sb.WriteString("}\n\t")
+		for _, a := range op.InlineArgs {
+			if !a.IsOptional {
+				continue
+			}
+			fmt.Fprintf(&sb, "if %s {\n\t\tvars[%q] = %s\n\t}\n\t", inlineArgZeroCheck(a), a.GQLVar, a.Name)
+		}
+	} else {
+		sb.WriteString("var vars map[string]any\n\t")
+	}
+	outerTag := bt + `json:"` + resultKey + `"` + bt
+	innerTag := bt + `json:"items"` + bt
+	fmt.Fprintf(&sb,
+		"var result struct {\n\t\t%s struct {\n\t\t\tItems []%s %s\n\t\t} %s\n\t}\n\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t}\n\treturn result.%s.Items, nil",
+		toPascalCase(resultKey), returnType, innerTag, outerTag,
+		endpoint, constName, op.Name, toPascalCase(resultKey))
+	return sb.String()
+}
+
+// inlineArgZeroCheck produces a Go expression that's true when the arg is non-zero
+// for the purpose of conditional vars inclusion. Distinguishes scalar Go types.
+func inlineArgZeroCheck(a InlineArg) string {
+	switch a.GoType {
+	case "bool":
+		return a.Name
+	case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "float32", "float64":
+		return a.Name + " > 0"
+	}
+	if strings.HasPrefix(a.GoType, "*") || strings.HasPrefix(a.GoType, "[]") {
+		return a.Name + " != nil"
+	}
+	return a.Name + ` != ""`
 }
 
 func buildListSimpleTopLevelBody(methodName, returnType, resultKey, endpoint, constName string) string {
@@ -2194,7 +2365,16 @@ func formatGoLiteral(v any) string {
 		if len(val) == 0 {
 			return "map[string]any{}"
 		}
-		return fmt.Sprintf("%v", val)
+		keys := make([]string, 0, len(val))
+		for k := range val {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			parts = append(parts, fmt.Sprintf("%q: %s", k, formatGoLiteral(val[k])))
+		}
+		return "map[string]any{" + strings.Join(parts, ", ") + "}"
 	case []any:
 		parts := make([]string, len(val))
 		for i, elem := range val {
