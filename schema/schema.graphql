@@ -846,6 +846,16 @@ input GroupUpdateInput {
 	accessGroup: Boolean
 	roleIds: [ID]
 }
+enum HTTP_CLIENT_METHOD {
+	POST
+	PUT
+	PATCH
+}
+type HttpClientParams {
+	headers: [HttpHeader!]!
+	method: HTTP_CLIENT_METHOD!
+	url: String!
+}
 type HttpHeader {
 	header: String!
 	value: String!
@@ -900,12 +910,34 @@ input InternalAnalyticInput {
 	tenantActions: [AnalyticActionsInput]
 	tenantSeverity: SEVERITY
 }
+enum JAMF_CLOUD_DESTINATION_FILTER {
+	now_s3_only
+	s3_only
+	s3_0_3_db_1_3
+}
+type JamfCloudClientParams {
+	destinationFilter: JAMF_CLOUD_DESTINATION_FILTER
+}
+type KafkaClientParams {
+	host: String!
+	port: Int!
+	topic: String!
+	clientCN: String
+	serverCN: String!
+}
 enum LOG_LEVEL_ENUM {
 	ERROR
 	WARNING
 	INFO
 	DEBUG
 	VERBOSE
+}
+type LogFileClientParams {
+	path: String!
+	permissions: String!
+	maxSizeMB: Int!
+	ownership: String!
+	backups: Int!
 }
 enum ORGANIZATION_GROUPS_ENUM {
 	PROD
@@ -1112,6 +1144,13 @@ input PreventListQueryInput {
 	pageSize: Int
 	filter: PreventListFilterInput
 }
+type ProductRule implements USBControlRule {
+	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
+	messageAction: String
+	type: USBCONTROL_RULE_TYPE!
+	applyTo: USBCONTROL_ENCRYPTION_ENUM!
+	products: [ProductValue]
+}
 input ProductRuleInput {
 	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
 	messageAction: String
@@ -1206,7 +1245,7 @@ input ReportClientInput {
 	batchConfig: BatchConfigInput!
 	params: AWSJSON!
 }
-union ReportClientParams
+union ReportClientParams = HttpClientParams | LogFileClientParams | JamfCloudClientParams | KafkaClientParams | SyslogClientParams
 type Retention {
 	database: DbStorageRetention
 	cold: ColdStorageRetention
@@ -1248,6 +1287,17 @@ enum SEVERITY {
 	Low
 	Informational
 }
+enum SYSLOG_SCHEME {
+	tcp
+	tls
+}
+type SerialRule implements USBControlRule {
+	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
+	messageAction: String
+	type: USBCONTROL_RULE_TYPE!
+	applyTo: USBCONTROL_ENCRYPTION_ENUM!
+	serials: [String]
+}
 input SerialRuleInput {
 	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
 	messageAction: String
@@ -1264,6 +1314,11 @@ enum SignaturesFeedConfigEnum {
 }
 input SignaturesFeedConfigInput {
 	mode: SignaturesFeedConfigEnum!
+}
+type SyslogClientParams {
+	host: String!
+	port: Int!
+	scheme: SYSLOG_SCHEME!
 }
 input TableBooleanFilterInput {
 	isNull: Boolean
@@ -1554,6 +1609,13 @@ input UserUpdateInput {
 }
 type VanillaPackage {
 	version: String
+}
+type VendorRule implements USBControlRule {
+	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
+	messageAction: String
+	type: USBCONTROL_RULE_TYPE!
+	applyTo: USBCONTROL_ENCRYPTION_ENUM!
+	vendors: [String]
 }
 input VendorRuleInput {
 	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!

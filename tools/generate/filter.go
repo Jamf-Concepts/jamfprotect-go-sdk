@@ -119,6 +119,12 @@ func (sf *schemaFilter) walkResource(r ResourceConfig) {
 		sf.addTypeAll(te.SchemaName)
 	}
 
+	for _, uf := range r.UnionFields {
+		for variantName := range uf.Variants {
+			sf.addTypeAllTransitive(variantName)
+		}
+	}
+
 	for _, op := range r.Operations {
 		sf.walkOperation(op)
 	}
@@ -243,8 +249,10 @@ func (sf *schemaFilter) buildDoc() *ast.SchemaDocument {
 // stripping descriptions and directives for privacy.
 func buildFilteredDef(def *ast.Definition, fieldAllow map[string]bool) *ast.Definition {
 	d := &ast.Definition{
-		Kind: def.Kind,
-		Name: def.Name,
+		Kind:       def.Kind,
+		Name:       def.Name,
+		Interfaces: def.Interfaces,
+		Types:      def.Types,
 	}
 	switch def.Kind {
 	case ast.Enum:
