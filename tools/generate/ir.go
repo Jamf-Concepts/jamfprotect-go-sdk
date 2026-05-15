@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -634,16 +635,16 @@ func applyInputTypeRenames(goType string, renames map[string]string) string {
 	if len(renames) == 0 {
 		return goType
 	}
-	prefix := ""
+	var prefix strings.Builder
 	base := goType
 	for _, p := range []string{"[]", "*"} {
 		if strings.HasPrefix(base, p) {
-			prefix += p
+			prefix.WriteString(p)
 			base = base[len(p):]
 		}
 	}
 	if renamed, ok := renames[base]; ok {
-		return prefix + renamed
+		return prefix.String() + renamed
 	}
 	return goType
 }
@@ -817,12 +818,8 @@ func buildOperation(schema *ast.Schema, res ResourceConfig, op OperationConfig, 
 	}
 	// Per-op extra var values override / extend resource-level extra var values.
 	combinedExtraVars := make(map[string]any)
-	for k, v := range res.ExtraVarValues {
-		combinedExtraVars[k] = v
-	}
-	for k, v := range op.ExtraVarValues {
-		combinedExtraVars[k] = v
-	}
+	maps.Copy(combinedExtraVars, res.ExtraVarValues)
+	maps.Copy(combinedExtraVars, op.ExtraVarValues)
 	sig, doc, body, err := buildMethodParts(op, kind, endpoint, returnType, returnNullable, resultKey, constName, idField, res.RBACMap, combinedExtraVars)
 	if err != nil {
 		return IROperation{}, err
@@ -1186,7 +1183,7 @@ func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginati
 	for k, v := range paginationVars {
 		if v == nil {
 			opaqueFields[k] = true
-		} else if _, ok := v.(map[string]interface{}); ok {
+		} else if _, ok := v.(map[string]any); ok {
 			opaqueFields[k] = true
 		}
 	}
@@ -1211,13 +1208,13 @@ func buildPaginatedListStr(schema *ast.Schema, gqlName, fragRef string, paginati
 	if len(listItemFields) > 0 {
 		itemsContent = strings.Join(listItemFields, "\n\t\t\t")
 	}
-	topArgStr := ""
+	var topArgStr strings.Builder
 	for _, a := range topLevelArgs {
-		topArgStr += a.GQLVar + ": $" + a.GQLVar + "\n\t\t"
+		topArgStr.WriteString(a.GQLVar + ": $" + a.GQLVar + "\n\t\t")
 	}
 	return fmt.Sprintf(
 		"\nquery %s(%s) {\n\t%s(\n\t\t%sinput: %s\n\t) {\n\t\titems {\n\t\t\t%s\n\t\t}\n\t\tpageInfo {\n\t\t\tnext\n\t\t\ttotal\n\t\t}\n\t}\n}\n",
-		gqlName, allDecls, gqlName, topArgStr, constructor, itemsContent,
+		gqlName, allDecls, gqlName, topArgStr.String(), constructor, itemsContent,
 	), nil
 }
 
@@ -1466,11 +1463,12 @@ func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constNam
 	}
 	b.WriteString("\t}\n")
 	fmt.Fprintf(&b, "\tif err := c.transport.DoGraphQL(ctx, %q, %s, %s, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s: %%w\", err)\n\t}\n", endpoint, constName, varsArg, zeroExpr, methodName)
-	accessor := "result"
+	var accessor strings.Builder
+	accessor.WriteString("result")
 	for _, part := range parts {
-		accessor += "." + toPascalCase(part)
+		accessor.WriteString("." + toPascalCase(part))
 	}
-	fmt.Fprintf(&b, "\treturn %s, nil", accessor)
+	fmt.Fprintf(&b, "\treturn %s, nil", accessor.String())
 	return b.String()
 }
 
@@ -1532,11 +1530,12 @@ func buildMutationListBody(op OperationConfig, returnType, resultKey, endpoint, 
 	}
 	b.WriteString("\t}\n")
 	fmt.Fprintf(&b, "\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t}\n", endpoint, constName, op.Name)
-	accessor := "result"
+	var accessor strings.Builder
+	accessor.WriteString("result")
 	for _, part := range parts {
-		accessor += "." + toPascalCase(part)
+		accessor.WriteString("." + toPascalCase(part))
 	}
-	fmt.Fprintf(&b, "\treturn %s, nil", accessor)
+	fmt.Fprintf(&b, "\treturn %s, nil", accessor.String())
 	return b.String()
 }
 
@@ -1673,7 +1672,6 @@ func buildListPaginatedBody(methodName, returnType, resultKey, endpoint, constNa
 		localVar, returnType, endpoint, constName, varsExpr, resultKey, errCall, localVar), nil
 }
 
-
 func buildListSimpleBody(methodName, returnType, resultKey, endpoint, constName string) string {
 	localVar := lcFirst(returnType) + "s"
 	outerTag := bt + `json:"` + resultKey + `"` + bt
@@ -1715,12 +1713,12 @@ func formatGoLiteral(v any) string {
 		return fmt.Sprintf("%q", val)
 	case bool:
 		return fmt.Sprintf("%t", val)
-	case map[string]interface{}:
+	case map[string]any:
 		if len(val) == 0 {
 			return "map[string]any{}"
 		}
 		return fmt.Sprintf("%v", val)
-	case []interface{}:
+	case []any:
 		parts := make([]string, len(val))
 		for i, elem := range val {
 			parts[i] = formatGoLiteral(elem)
