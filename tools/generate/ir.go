@@ -1365,7 +1365,7 @@ func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constNam
 
 	// Build the inner type expression and the zero-value expression for error returns.
 	innerType := returnType
-	zeroExpr := returnType + "{}"
+	zeroExpr := primitiveZeroExpr(returnType)
 	if returnIsList {
 		innerType = "[]" + returnType
 		zeroExpr = "nil"
@@ -1604,6 +1604,22 @@ func buildListSimpleBody(methodName, returnType, resultKey, endpoint, constName 
 		toPascalCase(resultKey), returnType, innerTag, outerTag,
 		endpoint, constName, methodName,
 		localVar, toPascalCase(resultKey), localVar)
+}
+
+// primitiveZeroExpr returns the Go zero-value literal for t, falling back to t+"{}".
+func primitiveZeroExpr(t string) string {
+	switch t {
+	case "int64", "int32", "int", "int16", "int8", "uint64", "uint32", "uint":
+		return "0"
+	case "float64", "float32":
+		return "0"
+	case "bool":
+		return "false"
+	case "string":
+		return `""`
+	default:
+		return t + "{}"
+	}
 }
 
 func formatGoLiteral(v any) string {
