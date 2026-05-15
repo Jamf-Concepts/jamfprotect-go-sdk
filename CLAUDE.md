@@ -99,4 +99,4 @@ Acceptance tests use `JAMFPROTECT_BASE_URL` (not `JAMFPROTECT_URL`) plus `JAMFPR
 
 ## Schema
 
-The GraphQL schema used by the generator is at `testing/schema.graphql`. A copy (may lag slightly) is at `bin/schema.graphql`. The audit of SDK coverage against the schema is at `bin/AUDIT.md`.
+`testing/` and `bin/` are gitignored — schema files are not committed. To run the generator, obtain `schema.graphql` from the private API repo and place it at `testing/schema.graphql`. The audit of SDK coverage is at `bin/AUDIT.md` (committed via `git add -f`).
