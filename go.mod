@@ -1,6 +1,6 @@
 module github.com/Jamf-Concepts/jamfprotect-go-sdk
 
-go 1.26.2
+go 1.26.3
 
 require (
 	github.com/hashicorp/go-retryablehttp v0.7.8

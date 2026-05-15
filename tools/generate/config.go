@@ -39,10 +39,13 @@ type ResourceConfig struct {
 	ExtraVars                map[string]string   `json:"extraVars,omitempty"`                // extra GQL var declarations added to non-delete operation signatures
 	ExtraVarValues           map[string]any      `json:"extraVarValues,omitempty"`           // static var values merged into get/create/update method bodies
 	RBACMap                  string              `json:"rbacMap,omitempty"`                  // package-level RBAC map name passed to mergeVars in method bodies
-	NullableInputFields      []string            `json:"nullableInputFields,omitempty"`      // input fields that should use pointer types despite being scalars
-	OptionalInputFields      []string            `json:"optionalInputFields,omitempty"`      // input fields omitted from buildVars when zero/nil (conditional inclusion)
-	InputTypeRenames         map[string]string   `json:"inputTypeRenames,omitempty"`         // schema InputObject name → Go type name for nested generated input types
-	NullableNestedInputFields map[string][]string `json:"nullableNestedInputFields,omitempty"` // schema InputObject name → field names that should use *T + omitempty
+	NullableInputFields       []string                     `json:"nullableInputFields,omitempty"`       // input fields that should use pointer types despite being scalars
+	OptionalInputFields       []string                     `json:"optionalInputFields,omitempty"`       // input fields omitted from buildVars when zero/nil (conditional inclusion)
+	ExplicitNullInputFields   []string                     `json:"explicitNullInputFields,omitempty"`   // input fields needing three-state null/omit/set; emits a matching FooNull bool sentinel
+	InputTypeRenames          map[string]string            `json:"inputTypeRenames,omitempty"`          // schema InputObject name → Go type name for nested generated input types
+	InputFieldGoRenames       map[string]map[string]string `json:"inputFieldGoRenames,omitempty"`       // schema InputObject name → (schema field name → Go field name override)
+	NullableNestedInputFields map[string][]string          `json:"nullableNestedInputFields,omitempty"` // schema InputObject name → field names that should use *T + omitempty
+	MapInputFields            map[string]string            `json:"mapInputFields,omitempty"`            // top-level input field name → opaque Go type (e.g. "map[string]any"); skips nested type recursion
 	UnionFields              map[string]UnionFieldConfig `json:"unionFields,omitempty"`      // fieldName → union/interface field expansion config
 	ExtraResponseTypes       []ExtraResponseType `json:"extraResponseTypes,omitempty"`       // additional Go response types not tied to a field (e.g. list-item types)
 	NullableResponseFields   []string            `json:"nullableResponseFields,omitempty"`   // top-level response fields that should use pointer types even for scalars
@@ -123,6 +126,7 @@ type OperationConfig struct {
 	ReturnIsList      bool                `json:"returnIsList,omitempty"`      // when true, the op returns []ReturnType instead of ReturnType (for singleton_get/singleton_update on list-shaped results)
 	TopLevelArgs      []TopLevelArg       `json:"topLevelArgs,omitempty"`      // extra GQL args forwarded as top-level field args alongside input (e.g. uuid in listInsightComputers)
 	FieldArgs         string              `json:"fieldArgs,omitempty"`         // verbatim GQL field argument string appended to the field call (e.g. "date: $date")
+	NoSelection       bool                `json:"noSelection,omitempty"`       // suppress { ... } selection set (for scalar-return singleton_get, e.g. String return)
 }
 
 // MultiWrappedInput declares one typed GraphQL input variable for a multi_wrapped_update mutation.

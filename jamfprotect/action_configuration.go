@@ -12,145 +12,282 @@ import (
 	"github.com/Jamf-Concepts/jamfprotect-go-sdk/internal/client"
 )
 
-// actionConfigFields defines the GraphQL fragment for action configuration fields.
+// ── Query/Mutation constants ──────────────────────────────────────────────────
+
 const actionConfigFields = `
-fragment ActionConfigsFields on ActionConfigs {
-    id
-    name
-    description
-    hash
-    created
-    updated
-    alertConfig {
-        data {
-            binary { attrs related }
-            clickEvent { attrs related }
-            downloadEvent { attrs related }
-            file { attrs related }
-            fsEvent { attrs related }
-            group { attrs related }
-            procEvent { attrs related }
-            process { attrs related }
-            screenshotEvent { attrs related }
-            usbEvent { attrs related }
-            user { attrs related }
-            gkEvent { attrs related }
-            keylogRegisterEvent { attrs related }
-            mrtEvent { attrs related }
-        }
-    }
-    clients {
-        id
-        type
-        supportedReports
-        batchConfig {
-            delimiter
-            sizeIndex
-            windowInSeconds
-            sizeInBytes
-        }
-        params {
-            ... on JamfCloudClientParams { destinationFilter }
-            ... on HttpClientParams { headers { header value } method url }
-            ... on KafkaClientParams { host port topic clientCN serverCN }
-            ... on SyslogClientParams { host port scheme }
-            ... on LogFileClientParams { path permissions maxSizeMB ownership backups }
-        }
-    }
-    plans {
-        id
-        name
-    }
+fragment ActionConfigFields on ActionConfigs {
+	id
+	name
+	description
+	hash
+	created
+	updated
+	alertConfig {
+		data {
+			binary {
+				attrs
+				related
+			}
+			clickEvent {
+				attrs
+				related
+			}
+			downloadEvent {
+				attrs
+				related
+			}
+			file {
+				attrs
+				related
+			}
+			fsEvent {
+				attrs
+				related
+			}
+			group {
+				attrs
+				related
+			}
+			procEvent {
+				attrs
+				related
+			}
+			process {
+				attrs
+				related
+			}
+			screenshotEvent {
+				attrs
+				related
+			}
+			usbEvent {
+				attrs
+				related
+			}
+			user {
+				attrs
+				related
+			}
+			gkEvent {
+				attrs
+				related
+			}
+			keylogRegisterEvent {
+				attrs
+				related
+			}
+			mrtEvent {
+				attrs
+				related
+			}
+		}
+	}
+	clients {
+		id
+		type
+		supportedReports
+		batchConfig {
+			sizeIndex
+			windowInSeconds
+			sizeInBytes
+			delimiter
+		}
+		params {
+			... on HttpClientParams {
+				headers {
+					header
+					value
+				}
+				method
+				url
+			}
+			... on JamfCloudClientParams {
+				destinationFilter
+			}
+			... on KafkaClientParams {
+				host
+				port
+				topic
+				clientCN
+				serverCN
+			}
+			... on LogFileClientParams {
+				path
+				permissions
+				maxSizeMB
+				ownership
+				backups
+			}
+			... on SyslogClientParams {
+				host
+				port
+				scheme
+			}
+		}
+	}
+	plans {
+		id
+		name
+	}
 }
 `
 
-// createActionConfigMutation defines the GraphQL mutation for creating an action configuration.
 const createActionConfigMutation = `
-mutation createActionConfigs(
-    $name: String!,
-    $description: String!,
-    $alertConfig: ActionConfigsAlertConfigInput!,
-    $clients: [ReportClientInput!]
-) {
-    createActionConfigs(input: {
-        name: $name,
-        description: $description,
-        alertConfig: $alertConfig,
-        clients: $clients
-    }) {
-        ...ActionConfigsFields
-    }
+mutation createActionConfigs($name: String!, $description: String!, $clients: [ReportClientInput!], $alertConfig: ActionConfigsAlertConfigInput) {
+	createActionConfigs(
+		input: {name: $name, description: $description, clients: $clients, alertConfig: $alertConfig}
+	) {
+		...ActionConfigFields
+	}
 }
 ` + actionConfigFields
 
-// getActionConfigQuery defines the GraphQL query for retrieving an action configuration by ID.
 const getActionConfigQuery = `
 query getActionConfigs($id: ID!) {
-    getActionConfigs(id: $id) {
-        ...ActionConfigsFields
-    }
+	getActionConfigs(id: $id) {
+		...ActionConfigFields
+	}
 }
 ` + actionConfigFields
 
-// updateActionConfigMutation defines the GraphQL mutation for updating an existing action configuration.
 const updateActionConfigMutation = `
-mutation updateActionConfigs(
-    $id: ID!,
-    $name: String!,
-    $description: String!,
-    $alertConfig: ActionConfigsAlertConfigInput!,
-    $clients: [ReportClientInput!]
-) {
-    updateActionConfigs(id: $id, input: {
-        name: $name,
-        description: $description,
-        alertConfig: $alertConfig,
-        clients: $clients
-    }) {
-        ...ActionConfigsFields
-    }
+mutation updateActionConfigs($id: ID!, $name: String!, $description: String!, $clients: [ReportClientInput!], $alertConfig: ActionConfigsAlertConfigInput) {
+	updateActionConfigs(
+		id: $id
+		input: {name: $name, description: $description, clients: $clients, alertConfig: $alertConfig}
+	) {
+		...ActionConfigFields
+	}
 }
 ` + actionConfigFields
 
-// deleteActionConfigMutation defines the GraphQL mutation for deleting an action configuration by ID.
 const deleteActionConfigMutation = `
 mutation deleteActionConfigs($id: ID!) {
-    deleteActionConfigs(id: $id) {
-        id
-    }
+	deleteActionConfigs(id: $id) {
+		id
+	}
 }
 `
 
-// listActionConfigsQuery defines the GraphQL query for listing all action configurations with pagination support.
 const listActionConfigsQuery = `
-query listActionConfigs($nextToken: String, $direction: OrderDirection!, $field: ActionConfigsOrderField!) {
-    listActionConfigs(
-        input: {next: $nextToken, order: {direction: $direction, field: $field}, pageSize: 100}
-    ) {
-        items {
-            id
-            name
-            description
-            created
-            updated
-        }
-        pageInfo {
-            next
-            total
-        }
-    }
+query listActionConfigs($nextToken: String, $direction: OrderDirection!, $field: ActionConfigsOrderField!, $pageSize: Int) {
+	listActionConfigs(
+		input: {next: $nextToken, order: {direction: $direction, field: $field}, pageSize: $pageSize}
+	) {
+		items {
+			id
+			name
+			description
+			created
+			updated
+		}
+		pageInfo {
+			next
+			total
+		}
+	}
 }
 `
 
-// ActionConfigInput is the create/update input for an action configuration.
+// ── Input types ───────────────────────────────────────────────────────────────
+
+// ActionConfigInput is the input for actionConfig operations.
 type ActionConfigInput struct {
 	Name        string
 	Description string
-	AlertConfig map[string]any
 	Clients     []map[string]any
+	AlertConfig map[string]any
 }
 
-// ActionConfig is the API representation of an action configuration.
+// ── Response types ────────────────────────────────────────────────────────────
+
+// AlertConfig contains ActionConfigsAlertConfig data.
+type AlertConfig struct {
+	Data *AlertData `json:"data"`
+}
+
+// ReportClient contains ReportClient data.
+type ReportClient struct {
+	ID               string             `json:"id"`
+	Type             string             `json:"type"`
+	SupportedReports []string           `json:"supportedReports"`
+	BatchConfig      *BatchConfig       `json:"batchConfig"`
+	Params           ReportClientParams `json:"params"`
+}
+
+// ReportClientParams contains ReportClientParams data.
+type ReportClientParams struct {
+	Headers           []ReportClientHeader `json:"headers"`
+	Method            string               `json:"method"`
+	URL               string               `json:"url"`
+	DestinationFilter string               `json:"destinationFilter"`
+	Host              string               `json:"host"`
+	Port              int64                `json:"port"`
+	Topic             string               `json:"topic"`
+	ClientCN          string               `json:"clientCN"`
+	ServerCN          string               `json:"serverCN"`
+	Path              string               `json:"path"`
+	Permissions       string               `json:"permissions"`
+	MaxSizeMB         int64                `json:"maxSizeMB"`
+	Ownership         string               `json:"ownership"`
+	Backups           int64                `json:"backups"`
+	Scheme            string               `json:"scheme"`
+}
+
+// ActionConfigPlan contains Plan data.
+type ActionConfigPlan struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// AlertData contains AlertDataConfigs data.
+type AlertData struct {
+	Binary              *AlertEventType `json:"binary"`
+	ClickEvent          *AlertEventType `json:"clickEvent"`
+	DownloadEvent       *AlertEventType `json:"downloadEvent"`
+	File                *AlertEventType `json:"file"`
+	FsEvent             *AlertEventType `json:"fsEvent"`
+	Group               *AlertEventType `json:"group"`
+	ProcEvent           *AlertEventType `json:"procEvent"`
+	Process             *AlertEventType `json:"process"`
+	ScreenshotEvent     *AlertEventType `json:"screenshotEvent"`
+	USBEvent            *AlertEventType `json:"usbEvent"`
+	User                *AlertEventType `json:"user"`
+	GkEvent             *AlertEventType `json:"gkEvent"`
+	KeylogRegisterEvent *AlertEventType `json:"keylogRegisterEvent"`
+	MrtEvent            *AlertEventType `json:"mrtEvent"`
+}
+
+// BatchConfig contains BatchConfig data.
+type BatchConfig struct {
+	SizeIndex       int64  `json:"sizeIndex"`
+	WindowInSeconds int64  `json:"windowInSeconds"`
+	SizeInBytes     int64  `json:"sizeInBytes"`
+	Delimiter       string `json:"delimiter"`
+}
+
+// ReportClientHeader contains HttpHeader data.
+type ReportClientHeader struct {
+	Header string `json:"header"`
+	Value  string `json:"value"`
+}
+
+// AlertEventType contains AlertDataConfig data.
+type AlertEventType struct {
+	Attrs   []string `json:"attrs"`
+	Related []string `json:"related"`
+}
+
+// ActionConfigListItem contains ActionConfigs data.
+type ActionConfigListItem struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Created     string `json:"created"`
+	Updated     string `json:"updated"`
+}
+
+// ActionConfig represents a Jamf Protect actionConfig.
 type ActionConfig struct {
 	ID          string             `json:"id"`
 	Name        string             `json:"name"`
@@ -163,140 +300,46 @@ type ActionConfig struct {
 	Plans       []ActionConfigPlan `json:"plans"`
 }
 
-// ActionConfigPlan represents a lightweight plan reference on an action configuration.
-type ActionConfigPlan struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
+// ── Client methods ────────────────────────────────────────────────────────────
 
-// ActionConfigListItem is the list view for action configurations.
-type ActionConfigListItem struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Created     string `json:"created"`
-	Updated     string `json:"updated"`
-}
-
-// AlertConfig maps alert configuration data for action configs.
-type AlertConfig struct {
-	Data *AlertData `json:"data"`
-}
-
-// AlertData contains event-type alert enrichment configuration.
-type AlertData struct {
-	Binary              *AlertEventType `json:"binary"`
-	ClickEvent          *AlertEventType `json:"clickEvent"`
-	DownloadEvent       *AlertEventType `json:"downloadEvent"`
-	File                *AlertEventType `json:"file"`
-	FsEvent             *AlertEventType `json:"fsEvent"`
-	Group               *AlertEventType `json:"group"`
-	ProcEvent           *AlertEventType `json:"procEvent"`
-	Process             *AlertEventType `json:"process"`
-	ScreenshotEvent     *AlertEventType `json:"screenshotEvent"`
-	UsbEvent            *AlertEventType `json:"usbEvent"`
-	User                *AlertEventType `json:"user"`
-	GkEvent             *AlertEventType `json:"gkEvent"`
-	KeylogRegisterEvent *AlertEventType `json:"keylogRegisterEvent"`
-	MrtEvent            *AlertEventType `json:"mrtEvent"`
-}
-
-// AlertEventType describes an event type's included attributes and related objects.
-type AlertEventType struct {
-	Attrs   []string `json:"attrs"`
-	Related []string `json:"related"`
-}
-
-// ReportClient represents a reporting client configuration.
-type ReportClient struct {
-	ID               string             `json:"id"`
-	Type             string             `json:"type"`
-	SupportedReports []string           `json:"supportedReports"`
-	BatchConfig      *BatchConfig       `json:"batchConfig"`
-	Params           ReportClientParams `json:"params"`
-}
-
-// BatchConfig represents batching configuration for a report client.
-type BatchConfig struct {
-	Delimiter       string `json:"delimiter"`
-	SizeIndex       int64  `json:"sizeIndex"`
-	WindowInSeconds int64  `json:"windowInSeconds"`
-	SizeInBytes     int64  `json:"sizeInBytes"`
-}
-
-// ReportClientParams represents endpoint-specific parameters for a report client.
-type ReportClientParams struct {
-	DestinationFilter string               `json:"destinationFilter"`
-	Headers           []ReportClientHeader `json:"headers"`
-	Method            string               `json:"method"`
-	URL               string               `json:"url"`
-	Host              string               `json:"host"`
-	Port              int64                `json:"port"`
-	Topic             string               `json:"topic"`
-	ClientCN          string               `json:"clientCN"`
-	ServerCN          string               `json:"serverCN"`
-	Scheme            string               `json:"scheme"`
-	Path              string               `json:"path"`
-	Permissions       string               `json:"permissions"`
-	MaxSizeMB         int64                `json:"maxSizeMB"`
-	Ownership         string               `json:"ownership"`
-	Backups           int64                `json:"backups"`
-}
-
-// ReportClientHeader represents a header entry for HTTP-based clients.
-type ReportClientHeader struct {
-	Header string `json:"header"`
-	Value  string `json:"value"`
-}
-
-// CreateActionConfig creates a new action configuration.
+// CreateActionConfig creates a new actionConfig.
 func (c *Client) CreateActionConfig(ctx context.Context, input ActionConfigInput) (ActionConfig, error) {
-	vars := map[string]any{
-		"name":        input.Name,
-		"description": input.Description,
-		"alertConfig": input.AlertConfig,
-		"clients":     input.Clients,
-	}
+	vars := buildActionConfigVariables(input)
 	var result struct {
-		CreateActionConfigs ActionConfig `json:"createActionConfigs"`
+		CreateActionConfig ActionConfig `json:"createActionConfigs"`
 	}
 	if err := c.transport.DoGraphQL(ctx, "/app", createActionConfigMutation, vars, &result); err != nil {
 		return ActionConfig{}, fmt.Errorf("CreateActionConfig: %w", err)
 	}
-	return result.CreateActionConfigs, nil
+	return result.CreateActionConfig, nil
 }
 
-// GetActionConfig retrieves an action configuration by ID.
+// GetActionConfig retrieves a actionConfig by ID.
 func (c *Client) GetActionConfig(ctx context.Context, id string) (*ActionConfig, error) {
 	vars := map[string]any{"id": id}
 	var result struct {
-		GetActionConfigs *ActionConfig `json:"getActionConfigs"`
+		GetActionConfig *ActionConfig `json:"getActionConfigs"`
 	}
 	if err := c.transport.DoGraphQL(ctx, "/app", getActionConfigQuery, vars, &result); err != nil {
 		return nil, fmt.Errorf("GetActionConfig(%s): %w", id, err)
 	}
-	return result.GetActionConfigs, nil
+	return result.GetActionConfig, nil
 }
 
-// UpdateActionConfig updates an existing action configuration.
+// UpdateActionConfig updates an existing actionConfig.
 func (c *Client) UpdateActionConfig(ctx context.Context, id string, input ActionConfigInput) (ActionConfig, error) {
-	vars := map[string]any{
-		"id":          id,
-		"name":        input.Name,
-		"description": input.Description,
-		"alertConfig": input.AlertConfig,
-		"clients":     input.Clients,
-	}
+	vars := buildActionConfigVariables(input)
+	vars["id"] = id
 	var result struct {
-		UpdateActionConfigs ActionConfig `json:"updateActionConfigs"`
+		UpdateActionConfig ActionConfig `json:"updateActionConfigs"`
 	}
 	if err := c.transport.DoGraphQL(ctx, "/app", updateActionConfigMutation, vars, &result); err != nil {
 		return ActionConfig{}, fmt.Errorf("UpdateActionConfig(%s): %w", id, err)
 	}
-	return result.UpdateActionConfigs, nil
+	return result.UpdateActionConfig, nil
 }
 
-// DeleteActionConfig deletes an action configuration by ID.
+// DeleteActionConfig deletes a actionConfig by ID.
 func (c *Client) DeleteActionConfig(ctx context.Context, id string) error {
 	vars := map[string]any{"id": id}
 	if err := c.transport.DoGraphQL(ctx, "/app", deleteActionConfigMutation, vars, nil); err != nil {
@@ -305,14 +348,24 @@ func (c *Client) DeleteActionConfig(ctx context.Context, id string) error {
 	return nil
 }
 
-// ListActionConfigs retrieves all action configurations.
+// ListActionConfigs retrieves all actionConfigListItems.
 func (c *Client) ListActionConfigs(ctx context.Context) ([]ActionConfigListItem, error) {
-	items, err := client.ListAll[ActionConfigListItem](ctx, c.transport, "/app", listActionConfigsQuery, map[string]any{
+	actionConfigListItems, err := client.ListAll[ActionConfigListItem](ctx, c.transport, "/app", listActionConfigsQuery, map[string]any{
 		"direction": "DESC",
 		"field":     "created",
+		"pageSize":  100,
 	}, "listActionConfigs")
 	if err != nil {
 		return nil, fmt.Errorf("ListActionConfigs: %w", err)
 	}
-	return items, nil
+	return actionConfigListItems, nil
+}
+
+func buildActionConfigVariables(input ActionConfigInput) map[string]any {
+	return map[string]any{
+		"name":        input.Name,
+		"description": input.Description,
+		"clients":     input.Clients,
+		"alertConfig": input.AlertConfig,
+	}
 }

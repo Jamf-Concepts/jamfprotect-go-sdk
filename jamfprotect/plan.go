@@ -12,6 +12,8 @@ import (
 	"github.com/Jamf-Concepts/jamfprotect-go-sdk/internal/client"
 )
 
+// ── Query/Mutation constants ──────────────────────────────────────────────────
+
 const planFields = `
 fragment PlanFields on Plan {
 	id
@@ -80,40 +82,8 @@ fragment PlanFields on Plan {
 `
 
 const createPlanMutation = `
-mutation createPlan(
-	$name: String!,
-	$description: String!,
-	$logLevel: LOG_LEVEL_ENUM,
-	$actionConfigs: ID!,
-	$exceptionSets: [ID!],
-	$telemetry: ID,
-	$telemetryV2: ID,
-	$analyticSets: [PlanAnalyticSetInput!],
-	$usbControlSet: ID,
-	$commsConfig: CommsConfigInput!,
-	$infoSync: InfoSyncInput!,
-	$autoUpdate: Boolean!,
-	$signaturesFeedConfig: SignaturesFeedConfigInput!,
-	$threatPreventionStrategy: ThreatPreventionStrategy,
-	$customEngineConfig: CustomEngineConfigInput
-) {
-	createPlan(input: {
-		name: $name,
-		description: $description,
-		logLevel: $logLevel,
-		actionConfigs: $actionConfigs,
-		exceptionSets: $exceptionSets,
-		telemetry: $telemetry,
-		telemetryV2: $telemetryV2,
-		analyticSets: $analyticSets,
-		usbControlSet: $usbControlSet,
-		commsConfig: $commsConfig,
-		infoSync: $infoSync,
-		autoUpdate: $autoUpdate,
-		signaturesFeedConfig: $signaturesFeedConfig,
-		threatPreventionStrategy: $threatPreventionStrategy,
-		customEngineConfig: $customEngineConfig
-	}) {
+mutation createPlan($input: PlanInput!) {
+	createPlan(input: $input) {
 		...PlanFields
 	}
 }
@@ -128,41 +98,8 @@ query getPlan($id: ID!) {
 ` + planFields
 
 const updatePlanMutation = `
-mutation updatePlan(
-	$id: ID!,
-	$name: String!,
-	$description: String!,
-	$logLevel: LOG_LEVEL_ENUM,
-	$actionConfigs: ID!,
-	$exceptionSets: [ID!],
-	$telemetry: ID,
-	$telemetryV2: ID,
-	$analyticSets: [PlanAnalyticSetInput!],
-	$usbControlSet: ID,
-	$commsConfig: CommsConfigInput!,
-	$infoSync: InfoSyncInput!,
-	$autoUpdate: Boolean!,
-	$signaturesFeedConfig: SignaturesFeedConfigInput!,
-	$threatPreventionStrategy: ThreatPreventionStrategy,
-	$customEngineConfig: CustomEngineConfigInput
-) {
-	updatePlan(id: $id, input: {
-		name: $name,
-		description: $description,
-		logLevel: $logLevel,
-		actionConfigs: $actionConfigs,
-		exceptionSets: $exceptionSets,
-		telemetry: $telemetry,
-		telemetryV2: $telemetryV2,
-		analyticSets: $analyticSets,
-		usbControlSet: $usbControlSet,
-		commsConfig: $commsConfig,
-		infoSync: $infoSync,
-		autoUpdate: $autoUpdate,
-		signaturesFeedConfig: $signaturesFeedConfig,
-		threatPreventionStrategy: $threatPreventionStrategy,
-		customEngineConfig: $customEngineConfig
-	}) {
+mutation updatePlan($id: ID!, $input: PlanInput!) {
+	updatePlan(id: $id, input: $input) {
 		...PlanFields
 	}
 }
@@ -177,9 +114,9 @@ mutation deletePlan($id: ID!) {
 `
 
 const listPlansQuery = `
-query listPlans($nextToken: String, $direction: OrderDirection!, $field: PlanOrderField!) {
+query listPlans($nextToken: String, $direction: OrderDirection!, $field: PlanOrderField!, $filter: PlanFiltersInput, $pageSize: Int) {
 	listPlans(
-		input: {next: $nextToken, order: {direction: $direction, field: $field}, pageSize: 100}
+		input: {next: $nextToken, order: {direction: $direction, field: $field}, filter: $filter, pageSize: $pageSize}
 	) {
 		items {
 			...PlanFields
@@ -198,75 +135,140 @@ query getPlansConfigProfile($id: ID!, $input: ProfileOptionsInput) {
 }
 `
 
-// PlanAnalyticSetInput is a plan analytic set input entry.
-type PlanAnalyticSetInput struct {
-	Type string
-	UUID string
-}
+// ── Input types ───────────────────────────────────────────────────────────────
 
-// PlanCommsConfigInput captures communications configuration.
-type PlanCommsConfigInput struct {
-	FQDN     string
-	Protocol string
-}
-
-// PlanInfoSyncInput captures info sync configuration.
-type PlanInfoSyncInput struct {
-	Attrs                []string
-	InsightsSyncInterval int64
-}
-
-// PlanSignaturesFeedConfigInput captures signatures feed configuration.
-type PlanSignaturesFeedConfigInput struct {
-	Mode string
-}
-
-// PlanConfigProfileTokenOptionsInput captures token options for plan profiles.
-type PlanConfigProfileTokenOptionsInput struct {
-	XPC              bool
-	KeychainClientID bool
-}
-
-// PlanConfigProfileOptionsInput captures config profile options for a plan.
-type PlanConfigProfileOptionsInput struct {
-	TokenOptions      PlanConfigProfileTokenOptionsInput
-	Sign              bool
-	PPPC              bool
-	Token             bool
-	CA                bool
-	CSR               bool
-	Websocket         bool
-	SystemExtension   bool
-	ServiceManagement bool
-}
-
-// CustomEngineConfigInput captures per-engine toggle settings for threat prevention.
-type CustomEngineConfigInput struct {
-	MalwareRiskware  string
-	AdversaryTactics string
-	SystemTampering  string
-	FilelessThreats  string
-	Experimental     string
-}
-
-// PlanInput is the create/update input for a plan.
+// PlanInput is the input for plan operations.
 type PlanInput struct {
-	Name                     string
-	Description              string
-	LogLevel                 *string
 	ActionConfigs            string
+	Description              string
+	Name                     string
+	LogLevel                 *string
 	ExceptionSets            []string
+	AnalyticSets             []PlanAnalyticSetInput
 	Telemetry                *string
 	TelemetryV2              *string
 	TelemetryV2Null          bool
-	AnalyticSets             []PlanAnalyticSetInput
-	USBControlSet            *string
-	CommsConfig              PlanCommsConfigInput
-	InfoSync                 PlanInfoSyncInput
 	AutoUpdate               bool
+	InfoSync                 PlanInfoSyncInput
+	CommsConfig              PlanCommsConfigInput
 	SignaturesFeedConfig     PlanSignaturesFeedConfigInput
+	USBControlSet            *string
 	ThreatPreventionStrategy string
 	CustomEngineConfig       *CustomEngineConfigInput
+}
+
+// PlanAnalyticSetInput is a nested input type.
+type PlanAnalyticSetInput struct {
+	UUID string `json:"uuid"`
+	Type string `json:"type"`
+}
+
+// PlanInfoSyncInput is a nested input type.
+type PlanInfoSyncInput struct {
+	InfoSyncInterval     *int64   `json:"infoSyncInterval,omitempty"`
+	InsightsSyncInterval int64    `json:"insightsSyncInterval"`
+	Attrs                []string `json:"attrs"`
+}
+
+// PlanCommsConfigInput is a nested input type.
+type PlanCommsConfigInput struct {
+	FQDN     string `json:"fqdn"`
+	Protocol string `json:"protocol"`
+}
+
+// PlanSignaturesFeedConfigInput is a nested input type.
+type PlanSignaturesFeedConfigInput struct {
+	Mode string `json:"mode"`
+}
+
+// CustomEngineConfigInput is a nested input type.
+type CustomEngineConfigInput struct {
+	MalwareRiskware  string `json:"MalwareRiskware"`
+	AdversaryTactics string `json:"AdversaryTactics"`
+	SystemTampering  string `json:"SystemTampering"`
+	FilelessThreats  string `json:"FilelessThreats"`
+	Experimental     string `json:"Experimental"`
+}
+
+// PlanConfigProfileOptionsInput is the input for planConfigProfileOptions operations.
+type PlanConfigProfileOptionsInput struct {
+	PPPC              bool
+	Token             bool
+	TokenOptions      PlanConfigProfileTokenOptionsInput
+	CA                bool
+	CSR               bool
+	Websocket         bool
+	Sign              bool
+	SystemExtension   bool
+	ServiceManagement bool
+	ConfigVersion     *int64
+}
+
+// PlanConfigProfileTokenOptionsInput is a nested input type.
+type PlanConfigProfileTokenOptionsInput struct {
+	XPC              bool `json:"xpc"`
+	KeychainClientID bool `json:"keychain_client_id"`
+}
+
+// ── Response types ────────────────────────────────────────────────────────────
+
+// CustomEngineConfig contains CustomEngineConfig data.
+type CustomEngineConfig struct {
+	MalwareRiskware  string `json:"MalwareRiskware"`
+	AdversaryTactics string `json:"AdversaryTactics"`
+	SystemTampering  string `json:"SystemTampering"`
+	FilelessThreats  string `json:"FilelessThreats"`
+	Experimental     string `json:"Experimental"`
+}
+
+// PlanCommsConfig contains CommsConfig data.
+type PlanCommsConfig struct {
+	FQDN     string `json:"fqdn"`
+	Protocol string `json:"protocol"`
+}
+
+// PlanInfoSync contains infoSync data.
+type PlanInfoSync struct {
+	Attrs                []string `json:"attrs"`
+	InsightsSyncInterval int64    `json:"insightsSyncInterval"`
+}
+
+// PlanSignaturesFeed contains SignaturesFeedConfig data.
+type PlanSignaturesFeed struct {
+	Mode string `json:"mode"`
+}
+
+// PlanRef contains ActionConfigs data.
+type PlanRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// PlanExceptionSet contains ExceptionSet data.
+type PlanExceptionSet struct {
+	UUID    string `json:"uuid"`
+	Name    string `json:"name"`
+	Managed bool   `json:"managed"`
+}
+
+// PlanAnalyticSet contains PlanAnalyticSet data.
+type PlanAnalyticSet struct {
+	Type        string             `json:"type"`
+	AnalyticSet PlanAnalyticSetRef `json:"analyticSet"`
+}
+
+// PlanAnalyticSetRef contains AnalyticSet data.
+type PlanAnalyticSetRef struct {
+	UUID      string         `json:"uuid"`
+	Name      string         `json:"name"`
+	Managed   bool           `json:"managed"`
+	Analytics []PlanAnalytic `json:"analytics"`
+}
+
+// PlanAnalytic contains Analytic data.
+type PlanAnalytic struct {
+	UUID       string   `json:"uuid"`
+	Categories []string `json:"categories"`
 }
 
 // Plan represents a Jamf Protect plan.
@@ -294,68 +296,11 @@ type Plan struct {
 	AnalyticSets             []PlanAnalyticSet   `json:"analyticSets"`
 }
 
-// CustomEngineConfig represents per-engine threat prevention mode settings.
-type CustomEngineConfig struct {
-	MalwareRiskware  string `json:"MalwareRiskware"`
-	AdversaryTactics string `json:"AdversaryTactics"`
-	SystemTampering  string `json:"SystemTampering"`
-	FilelessThreats  string `json:"FilelessThreats"`
-	Experimental     string `json:"Experimental"`
-}
-
-// PlanCommsConfig represents comms config in a plan.
-type PlanCommsConfig struct {
-	FQDN     string `json:"fqdn"`
-	Protocol string `json:"protocol"`
-}
-
-// PlanInfoSync represents info sync in a plan.
-type PlanInfoSync struct {
-	Attrs                []string `json:"attrs"`
-	InsightsSyncInterval int64    `json:"insightsSyncInterval"`
-}
-
-// PlanSignaturesFeed represents signatures feed config in a plan.
-type PlanSignaturesFeed struct {
-	Mode string `json:"mode"`
-}
-
-// PlanRef represents an entity reference in a plan.
-type PlanRef struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-// PlanExceptionSet represents an exception set in a plan.
-type PlanExceptionSet struct {
-	UUID    string `json:"uuid"`
-	Name    string `json:"name"`
-	Managed bool   `json:"managed"`
-}
-
-// PlanAnalyticSet represents an analytic set in a plan.
-type PlanAnalyticSet struct {
-	Type        string             `json:"type"`
-	AnalyticSet PlanAnalyticSetRef `json:"analyticSet"`
-}
-
-// PlanAnalyticSetRef represents an analytic set reference.
-type PlanAnalyticSetRef struct {
-	UUID      string         `json:"uuid"`
-	Name      string         `json:"name"`
-	Managed   bool           `json:"managed"`
-	Analytics []PlanAnalytic `json:"analytics"`
-}
-
-// PlanAnalytic represents analytic metadata on a plan analytic set.
-type PlanAnalytic struct {
-	UUID       string   `json:"uuid"`
-	Categories []string `json:"categories"`
-}
+// ── Client methods ────────────────────────────────────────────────────────────
 
 // CreatePlan creates a new plan.
 func (c *Client) CreatePlan(ctx context.Context, input PlanInput) (Plan, error) {
-	vars := buildPlanVariables(input)
+	vars := map[string]any{"input": buildPlanVariables(input)}
 	var result struct {
 		CreatePlan Plan `json:"createPlan"`
 	}
@@ -379,8 +324,7 @@ func (c *Client) GetPlan(ctx context.Context, id string) (*Plan, error) {
 
 // UpdatePlan updates an existing plan.
 func (c *Client) UpdatePlan(ctx context.Context, id string, input PlanInput) (Plan, error) {
-	vars := buildPlanVariables(input)
-	vars["id"] = id
+	vars := map[string]any{"id": id, "input": buildPlanVariables(input)}
 	var result struct {
 		UpdatePlan Plan `json:"updatePlan"`
 	}
@@ -404,6 +348,8 @@ func (c *Client) ListPlans(ctx context.Context) ([]Plan, error) {
 	plans, err := client.ListAll[Plan](ctx, c.transport, "/app", listPlansQuery, map[string]any{
 		"direction": "ASC",
 		"field":     "created",
+		"filter":    nil,
+		"pageSize":  100,
 	}, "listPlans")
 	if err != nil {
 		return nil, fmt.Errorf("ListPlans: %w", err)
@@ -411,45 +357,39 @@ func (c *Client) ListPlans(ctx context.Context) ([]Plan, error) {
 	return plans, nil
 }
 
-// GetPlansConfigProfile retrieves the config profile payload for a plan.
+// GetPlansConfigProfile retrieves the string.
 func (c *Client) GetPlansConfigProfile(ctx context.Context, id string, input *PlanConfigProfileOptionsInput) (string, error) {
 	vars := map[string]any{"id": id}
 	if input != nil {
-		vars["input"] = buildPlanConfigProfileInput(*input)
+		vars["input"] = buildPlanConfigProfileOptionsVariables(*input)
 	}
 	var result struct {
 		GetPlansConfigProfile string `json:"getPlansConfigProfile"`
 	}
 	if err := c.transport.DoGraphQL(ctx, "/app", getPlansConfigProfileQuery, vars, &result); err != nil {
-		return "", fmt.Errorf("GetPlansConfigProfile(%s): %w", id, err)
+		return "", fmt.Errorf("GetPlansConfigProfile: %w", err)
 	}
 	return result.GetPlansConfigProfile, nil
 }
 
 func buildPlanVariables(input PlanInput) map[string]any {
 	vars := map[string]any{
-		"name":          input.Name,
-		"description":   input.Description,
-		"actionConfigs": input.ActionConfigs,
-		"autoUpdate":    input.AutoUpdate,
-		"commsConfig": map[string]any{
-			"fqdn":     input.CommsConfig.FQDN,
-			"protocol": input.CommsConfig.Protocol,
-		},
-		"infoSync": map[string]any{
-			"attrs":                input.InfoSync.Attrs,
-			"insightsSyncInterval": input.InfoSync.InsightsSyncInterval,
-		},
-		"signaturesFeedConfig": map[string]any{
-			"mode": input.SignaturesFeedConfig.Mode,
-		},
+		"actionConfigs":        input.ActionConfigs,
+		"description":          input.Description,
+		"name":                 input.Name,
+		"autoUpdate":           input.AutoUpdate,
+		"infoSync":             input.InfoSync,
+		"commsConfig":          input.CommsConfig,
+		"signaturesFeedConfig": input.SignaturesFeedConfig,
 	}
-
 	if input.LogLevel != nil {
 		vars["logLevel"] = *input.LogLevel
 	}
 	if input.ExceptionSets != nil {
 		vars["exceptionSets"] = input.ExceptionSets
+	}
+	if input.AnalyticSets != nil {
+		vars["analyticSets"] = input.AnalyticSets
 	}
 	if input.Telemetry != nil {
 		vars["telemetry"] = *input.Telemetry
@@ -459,16 +399,6 @@ func buildPlanVariables(input PlanInput) map[string]any {
 	} else if input.TelemetryV2 != nil {
 		vars["telemetryV2"] = *input.TelemetryV2
 	}
-	if input.AnalyticSets != nil {
-		analyticSets := make([]map[string]any, 0, len(input.AnalyticSets))
-		for _, set := range input.AnalyticSets {
-			analyticSets = append(analyticSets, map[string]any{
-				"type": set.Type,
-				"uuid": set.UUID,
-			})
-		}
-		vars["analyticSets"] = analyticSets
-	}
 	if input.USBControlSet != nil {
 		vars["usbControlSet"] = *input.USBControlSet
 	}
@@ -476,31 +406,25 @@ func buildPlanVariables(input PlanInput) map[string]any {
 		vars["threatPreventionStrategy"] = input.ThreatPreventionStrategy
 	}
 	if input.CustomEngineConfig != nil {
-		vars["customEngineConfig"] = map[string]any{
-			"MalwareRiskware":  input.CustomEngineConfig.MalwareRiskware,
-			"AdversaryTactics": input.CustomEngineConfig.AdversaryTactics,
-			"SystemTampering":  input.CustomEngineConfig.SystemTampering,
-			"FilelessThreats":  input.CustomEngineConfig.FilelessThreats,
-			"Experimental":     input.CustomEngineConfig.Experimental,
-		}
+		vars["customEngineConfig"] = *input.CustomEngineConfig
 	}
-
 	return vars
 }
 
-func buildPlanConfigProfileInput(input PlanConfigProfileOptionsInput) map[string]any {
-	return map[string]any{
-		"tokenOptions": map[string]any{
-			"xpc":                input.TokenOptions.XPC,
-			"keychain_client_id": input.TokenOptions.KeychainClientID,
-		},
-		"sign":              input.Sign,
+func buildPlanConfigProfileOptionsVariables(input PlanConfigProfileOptionsInput) map[string]any {
+	vars := map[string]any{
 		"pppc":              input.PPPC,
 		"token":             input.Token,
+		"tokenOptions":      input.TokenOptions,
 		"ca":                input.CA,
 		"csr":               input.CSR,
 		"websocket":         input.Websocket,
+		"sign":              input.Sign,
 		"systemExtension":   input.SystemExtension,
 		"serviceManagement": input.ServiceManagement,
 	}
+	if input.ConfigVersion != nil {
+		vars["configVersion"] = *input.ConfigVersion
+	}
+	return vars
 }
