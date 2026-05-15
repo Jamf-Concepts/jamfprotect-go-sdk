@@ -964,6 +964,97 @@
       ]
     },
     {
+      "file": "computer.go",
+      "typeName": "Computer",
+      "idField": "uuid",
+      "fields": ["uuid", "serial", "hostName", "modelName", "osMajor", "osMinor", "osPatch", "arch", "certid", "memorySize", "osString", "kernelVersion", "installType", "label", "created", "updated", "version", "checkin", "configHash", "tags", "signaturesVersion", "plan", "insightsStatsFail", "insightsStatsPass", "insightsStatsUnknown", "insightsUpdated", "provisioningUDID", "connectionStatus", "lastConnection", "lastConnectionIp", "lastDisconnection", "lastDisconnectionReason", "webProtectionActive", "fullDiskAccess", "pendingPlan"],
+      "nullableResponseFields": ["uuid", "serial", "hostName", "modelName", "osMajor", "osMinor", "osPatch", "arch", "certid", "memorySize", "osString", "kernelVersion", "installType", "label", "created", "updated", "version", "checkin", "configHash", "tags", "signaturesVersion", "insightsStatsFail", "insightsStatsPass", "insightsStatsUnknown", "insightsUpdated", "provisioningUDID", "connectionStatus", "lastConnection", "lastConnectionIp", "lastDisconnection", "lastDisconnectionReason", "webProtectionActive", "fullDiskAccess", "pendingPlan"],
+      "directiveFields": {
+        "arch": "@skip(if: $isList)",
+        "certid": "@skip(if: $isList)",
+        "memorySize": "@skip(if: $isList)",
+        "kernelVersion": "@skip(if: $isList)",
+        "installType": "@skip(if: $isList)",
+        "signaturesVersion": "@include(if: $RBAC_ThreatPreventionVersion)",
+        "plan": "@include(if: $RBAC_Plan)",
+        "insightsStatsFail": "@include(if: $RBAC_Insight)",
+        "insightsStatsPass": "@include(if: $RBAC_Insight)",
+        "insightsStatsUnknown": "@include(if: $RBAC_Insight)",
+        "insightsUpdated": "@include(if: $RBAC_Insight)"
+      },
+      "nestedTypes": [
+        {
+          "schemaName": "Plan",
+          "goName": "ComputerPlan",
+          "fields": ["id", "name", "hash"],
+          "nullableFields": ["id", "name", "hash"],
+          "path": "plan"
+        }
+      ],
+      "extraVars": {
+        "isList": "Boolean!",
+        "RBAC_ThreatPreventionVersion": "Boolean!",
+        "RBAC_Plan": "Boolean!",
+        "RBAC_Insight": "Boolean!"
+      },
+      "extraVarValues": {"isList": false},
+      "rbacMap": "rbacComputer",
+      "nullableInputFields": ["label"],
+      "optionalInputFields": ["label", "tags"],
+      "operations": [
+        {
+          "name": "ListComputers",
+          "gqlName": "listComputers",
+          "kind": "list",
+          "endpoint": "/app",
+          "resultKey": "listComputers",
+          "pagination": true,
+          "paginationVars": {
+            "pageSize": 100,
+            "isList": true,
+            "direction": "ASC",
+            "field": ["hostName"],
+            "filter": null
+          }
+        },
+        {
+          "name": "GetComputer",
+          "gqlName": "getComputer",
+          "kind": "get",
+          "endpoint": "/app",
+          "resultKey": "getComputer"
+        },
+        {
+          "name": "DeleteComputer",
+          "gqlName": "deleteComputer",
+          "kind": "delete",
+          "endpoint": "/app"
+        },
+        {
+          "name": "SetComputerPlan",
+          "gqlName": "setComputerPlan",
+          "kind": "update_inline",
+          "endpoint": "/app",
+          "resultKey": "setComputerPlan",
+          "returnType": "*Computer",
+          "inlineArgs": [
+            {"name": "uuid", "goType": "string", "gqlVar": "uuid", "gqlType": "ID!", "isId": true},
+            {"name": "planID", "goType": "string", "gqlVar": "plan", "gqlType": "ID!"}
+          ]
+        },
+        {
+          "name": "UpdateComputer",
+          "gqlName": "updateComputer",
+          "kind": "update",
+          "endpoint": "/app",
+          "resultKey": "updateComputer",
+          "returnType": "*Computer",
+          "inputType": "ComputerEditableInput",
+          "inputTypeGoName": "ComputerUpdateInput"
+        }
+      ]
+    },
+    {
       "file": "audit_log.go",
       "typeName": "AuditLog",
       "fields": ["resourceId", "date", "args", "error", "ips", "op", "user"],
