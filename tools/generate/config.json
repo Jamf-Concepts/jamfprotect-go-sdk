@@ -987,6 +987,22 @@
     {
       "source": "_static/dashboard.go",
       "dest": "dashboard.go"
+    },
+    {
+      "source": "_static/rbac.go",
+      "dest": "rbac.go"
+    },
+    {
+      "source": "_static/errors.go",
+      "dest": "errors.go"
+    },
+    {
+      "source": "_static/doc.go",
+      "dest": "doc.go"
+    },
+    {
+      "source": "_static/types.go",
+      "dest": "types.go"
     }
   ]
 }
