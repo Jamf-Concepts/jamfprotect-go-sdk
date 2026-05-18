@@ -837,8 +837,8 @@
         "ExceptionAppSigningInfoInput": "AppSigningInfoInput"
       },
       "nullableNestedInputFields": {
-        "ExceptionInput": ["appSigningInfo"],
-        "EsExceptionInput": ["appSigningInfo"]
+        "ExceptionInput": ["appSigningInfo", "value", "analyticUuid", "analyticTypes"],
+        "EsExceptionInput": ["appSigningInfo", "value", "eventType", "ignoreListSubType"]
       },
       "extraResponseTypes": [
         {
