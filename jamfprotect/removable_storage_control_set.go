@@ -116,14 +116,14 @@ type RemovableStorageControlSetInput struct {
 
 // EncryptionRuleInput is a nested input type.
 type EncryptionRuleInput struct {
-	MountAction   string `json:"mountAction"`
-	MessageAction string `json:"messageAction"`
+	MountAction   string  `json:"mountAction"`
+	MessageAction *string `json:"messageAction,omitempty"`
 }
 
 // VendorRuleInput is a nested input type.
 type VendorRuleInput struct {
 	MountAction   string   `json:"mountAction"`
-	MessageAction string   `json:"messageAction"`
+	MessageAction *string  `json:"messageAction,omitempty"`
 	ApplyTo       string   `json:"applyTo"`
 	Vendors       []string `json:"vendors"`
 }
@@ -131,7 +131,7 @@ type VendorRuleInput struct {
 // SerialRuleInput is a nested input type.
 type SerialRuleInput struct {
 	MountAction   string   `json:"mountAction"`
-	MessageAction string   `json:"messageAction"`
+	MessageAction *string  `json:"messageAction,omitempty"`
 	ApplyTo       string   `json:"applyTo"`
 	Serials       []string `json:"serials"`
 }
@@ -145,18 +145,18 @@ type ProductValueInput struct {
 // ProductRuleInput is a nested input type.
 type ProductRuleInput struct {
 	MountAction   string              `json:"mountAction"`
-	MessageAction string              `json:"messageAction"`
+	MessageAction *string             `json:"messageAction,omitempty"`
 	ApplyTo       string              `json:"applyTo"`
 	Products      []ProductValueInput `json:"products"`
 }
 
 // RemovableStorageControlRuleInput is a nested input type.
 type RemovableStorageControlRuleInput struct {
-	Type           string              `json:"type"`
-	EncryptionRule EncryptionRuleInput `json:"encryptionRule"`
-	VendorRule     VendorRuleInput     `json:"vendorRule"`
-	SerialRule     SerialRuleInput     `json:"serialRule"`
-	ProductRule    ProductRuleInput    `json:"productRule"`
+	Type           string               `json:"type"`
+	EncryptionRule *EncryptionRuleInput `json:"encryptionRule,omitempty"`
+	VendorRule     *VendorRuleInput     `json:"vendorRule,omitempty"`
+	SerialRule     *SerialRuleInput     `json:"serialRule,omitempty"`
+	ProductRule    *ProductRuleInput    `json:"productRule,omitempty"`
 }
 
 // ── Response types ────────────────────────────────────────────────────────────

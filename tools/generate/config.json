@@ -1105,6 +1105,13 @@
       "inputTypeRenames": {
         "USBControlRuleInput": "RemovableStorageControlRuleInput"
       },
+      "nullableNestedInputFields": {
+        "USBControlRuleInput": ["encryptionRule", "vendorRule", "serialRule", "productRule"],
+        "EncryptionRuleInput": ["messageAction"],
+        "VendorRuleInput": ["messageAction"],
+        "SerialRuleInput": ["messageAction"],
+        "ProductRuleInput": ["messageAction"]
+      },
       "operations": [
         {
           "name": "CreateRemovableStorageControlSet",
