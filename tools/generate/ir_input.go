@@ -231,8 +231,10 @@ func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]
 			nfGoType := resolveInputGoType(nf.Type, schema, scalars)
 			nfGoType = applyInputTypeRenames(nfGoType, renames)
 			jsonTag := nf.Name
-			if nullableSet[nf.Name] && !strings.HasPrefix(nfGoType, "[]") && !strings.HasPrefix(nfGoType, "*") {
-				nfGoType = "*" + nfGoType
+			if nullableSet[nf.Name] {
+				if !strings.HasPrefix(nfGoType, "[]") && !strings.HasPrefix(nfGoType, "*") {
+					nfGoType = "*" + nfGoType
+				}
 				jsonTag += ",omitempty"
 			}
 			goFieldName := toPascalCase(nf.Name)
@@ -334,8 +336,10 @@ func buildMultiWrappedInputTypes(schema *ast.Schema, op OperationConfig, res Res
 			fGoType := resolveInputGoType(f.Type, schema, scalars)
 			fGoType = applyInputTypeRenames(fGoType, res.InputTypeRenames)
 			jsonTag := f.Name
-			if nullableSet[f.Name] && !strings.HasPrefix(fGoType, "[]") && !strings.HasPrefix(fGoType, "*") {
-				fGoType = "*" + fGoType
+			if nullableSet[f.Name] {
+				if !strings.HasPrefix(fGoType, "[]") && !strings.HasPrefix(fGoType, "*") {
+					fGoType = "*" + fGoType
+				}
 				jsonTag += ",omitempty"
 			}
 			fields = append(fields, IRField{
