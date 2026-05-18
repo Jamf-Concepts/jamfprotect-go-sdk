@@ -836,6 +836,10 @@
       "inputTypeRenames": {
         "ExceptionAppSigningInfoInput": "AppSigningInfoInput"
       },
+      "nullableNestedInputFields": {
+        "ExceptionInput": ["appSigningInfo"],
+        "EsExceptionInput": ["appSigningInfo"]
+      },
       "extraResponseTypes": [
         {
           "goName": "ExceptionSetListItem",
