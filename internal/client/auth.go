@@ -151,9 +151,15 @@ func (c *Client) fetchToken(ctx context.Context) (*Token, error) {
 		return nil, fmt.Errorf("token request returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
+	if !looksLikeJSON(respBody) {
+		return nil, fmt.Errorf("%w (status %d, content-type %q): %.256s",
+			ErrUnexpectedResponse, resp.StatusCode, resp.Header.Get("Content-Type"), string(respBody))
+	}
+
 	var tokenResp tokenResponse
 	if err := json.Unmarshal(respBody, &tokenResp); err != nil {
-		return nil, fmt.Errorf("decoding token response: %w", err)
+		return nil, fmt.Errorf("decoding token response (status %d, content-type %q): %w; body: %.256s",
+			resp.StatusCode, resp.Header.Get("Content-Type"), err, string(respBody))
 	}
 	if tokenResp.AccessToken == "" {
 		return nil, fmt.Errorf("%w: token response missing access_token", ErrAuthentication)

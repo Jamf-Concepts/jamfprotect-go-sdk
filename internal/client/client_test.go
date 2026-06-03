@@ -563,6 +563,62 @@ func TestClient_Query_MalformedJSON(t *testing.T) {
 	}
 }
 
+func TestClient_Query_HTMLBody(t *testing.T) {
+	t.Parallel()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		testEncodeJSON(t, w, map[string]any{"access_token": "tok", "expires_in": 3600})
+	})
+	mux.HandleFunc("/app", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		testWrite(t, w, []byte("<!DOCTYPE html><html><body>403 Forbidden</body></html>"))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "cid", "csecret")
+	err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, nil)
+
+	if err == nil {
+		t.Fatal("expected error from HTML body, got nil")
+	}
+	if !errors.Is(err, ErrUnexpectedResponse) {
+		t.Errorf("expected ErrUnexpectedResponse, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "text/html") {
+		t.Errorf("expected error to include content-type, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "200") {
+		t.Errorf("expected error to include status code, got: %v", err)
+	}
+}
+
+func TestClient_Authenticate_HTMLBody(t *testing.T) {
+	t.Parallel()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		testWrite(t, w, []byte("<html><body>edge throttled</body></html>"))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "cid", "csecret")
+	err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, nil)
+
+	if err == nil {
+		t.Fatal("expected error from HTML token body, got nil")
+	}
+	if !errors.Is(err, ErrUnexpectedResponse) {
+		t.Errorf("expected ErrUnexpectedResponse, got %v", err)
+	}
+	if !errors.Is(err, ErrAuthentication) {
+		t.Errorf("expected ErrAuthentication wrap, got %v", err)
+	}
+}
+
 func TestClient_Authenticate_EmptyToken(t *testing.T) {
 	t.Parallel()
 

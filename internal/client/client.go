@@ -126,9 +126,15 @@ func (c *Client) DoGraphQL(ctx context.Context, path, query string, variables ma
 		return fmt.Errorf("graphql request returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
+	if !looksLikeJSON(respBody) {
+		return fmt.Errorf("%w (status %d, content-type %q): %.256s",
+			ErrUnexpectedResponse, resp.StatusCode, resp.Header.Get("Content-Type"), string(respBody))
+	}
+
 	var gqlResp graphQLResponse
 	if err := json.Unmarshal(respBody, &gqlResp); err != nil {
-		return fmt.Errorf("decoding graphql response: %w", err)
+		return fmt.Errorf("decoding graphql response (status %d, content-type %q): %w; body: %.256s",
+			resp.StatusCode, resp.Header.Get("Content-Type"), err, string(respBody))
 	}
 	if err := mapGraphQLErrors(gqlResp.Errors); err != nil {
 		return err
@@ -141,6 +147,16 @@ func (c *Client) DoGraphQL(ctx context.Context, path, query string, variables ma
 		return fmt.Errorf("decoding graphql data: %w", err)
 	}
 	return nil
+}
+
+// looksLikeJSON reports whether the first non-whitespace byte of b begins a JSON
+// object or array, used to distinguish API responses from edge/proxy HTML bodies.
+func looksLikeJSON(b []byte) bool {
+	t := bytes.TrimLeft(b, " \t\r\n")
+	if len(t) == 0 {
+		return false
+	}
+	return t[0] == '{' || t[0] == '['
 }
 
 // Option configures a Client.

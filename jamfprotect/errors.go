@@ -11,7 +11,8 @@ import (
 
 // Sentinel errors re-exported from the transport layer.
 var (
-	ErrAuthentication = client.ErrAuthentication
-	ErrGraphQL        = client.ErrGraphQL
-	ErrNotFound       = client.ErrNotFound
+	ErrAuthentication     = client.ErrAuthentication
+	ErrGraphQL            = client.ErrGraphQL
+	ErrNotFound           = client.ErrNotFound
+	ErrUnexpectedResponse = client.ErrUnexpectedResponse
 )
