@@ -37,6 +37,7 @@ type Client struct {
 	tokenGroup  singleflight.Group
 	tokenCache  TokenCache
 	cacheKey    string
+	throttle    *throttle
 }
 
 // NewClient creates a new Jamf Protect GraphQL client.
@@ -63,6 +64,7 @@ func NewClientWithUserAgent(baseURL, clientID, clientSecret, userAgent string, o
 			ClientSecret: clientSecret,
 			TokenURL:     strings.TrimRight(baseURL, "/") + "/token",
 		},
+		throttle: &throttle{interval: defaultMinRequestInterval},
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -181,14 +183,26 @@ func WithTokenCache(cache TokenCache, cacheKey string) Option {
 	}
 }
 
-// httpDoer returns an httpDoer that wraps the client's HTTP client with logging if a logger is set, or the raw HTTP client otherwise.
-func (c *Client) httpDoer() httpDoer {
-	if c.logger == nil {
-		return c.httpClient
+// WithMinRequestInterval sets the minimum gap enforced between outbound GraphQL
+// requests. The default is 100ms; a non-positive value disables throttling.
+func WithMinRequestInterval(d time.Duration) Option {
+	return func(c *Client) {
+		if d < 0 {
+			d = 0
+		}
+		c.throttle.interval = d
 	}
+}
 
-	return &loggingDoer{
-		base:   c.httpClient,
-		logger: c.logger,
+// httpDoer returns an httpDoer that wraps the client's HTTP client with optional
+// request throttling and logging, applied outermost-first.
+func (c *Client) httpDoer() httpDoer {
+	var doer httpDoer = c.httpClient
+	if c.logger != nil {
+		doer = &loggingDoer{base: doer, logger: c.logger}
 	}
+	if c.throttle != nil && c.throttle.interval > 0 {
+		doer = &throttlingDoer{base: doer, throttle: c.throttle}
+	}
+	return doer
 }
