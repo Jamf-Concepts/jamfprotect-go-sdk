@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/Jamf-Concepts/jamfprotect-go-sdk/internal/client"
 )
@@ -38,6 +39,9 @@ func NewClient(baseURL, clientID, clientSecret string, opts ...Option) *Client {
 	}
 	if cache != nil {
 		transportOpts = append(transportOpts, client.WithTokenCache(cache, client.CacheKey(baseURL, clientID)))
+	}
+	if cfg.minRequestInterval != nil {
+		transportOpts = append(transportOpts, client.WithMinRequestInterval(*cfg.minRequestInterval))
 	}
 
 	transport := client.NewClientWithUserAgent(baseURL, clientID, clientSecret, cfg.userAgent, transportOpts...)
@@ -89,11 +93,12 @@ func (c *Client) GetCurrentPermissions(ctx context.Context) (RolePermissions, er
 
 // clientConfig holds configuration applied via Option functions.
 type clientConfig struct {
-	userAgent  string
-	httpClient *http.Client
-	logger     Logger
-	tokenCache TokenCache
-	cacheDir   string
+	userAgent          string
+	httpClient         *http.Client
+	logger             Logger
+	tokenCache         TokenCache
+	cacheDir           string
+	minRequestInterval *time.Duration
 }
 
 // Option configures a Client.
@@ -133,5 +138,13 @@ func WithTokenCache(cache TokenCache) Option {
 func WithFileTokenCache(dir string) Option {
 	return func(cfg *clientConfig) {
 		cfg.cacheDir = dir
+	}
+}
+
+// WithMinRequestInterval sets the minimum gap enforced between outbound GraphQL
+// requests. The default is 100ms; a non-positive value disables throttling.
+func WithMinRequestInterval(d time.Duration) Option {
+	return func(cfg *clientConfig) {
+		cfg.minRequestInterval = &d
 	}
 }
