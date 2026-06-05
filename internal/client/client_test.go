@@ -594,6 +594,80 @@ func TestClient_Query_HTMLBody(t *testing.T) {
 	}
 }
 
+// wafHTML is a representative HTML page as returned by the Jamf Protect WAF when
+// it blocks a request — a 200 OK with the tenant SPA shell instead of JSON.
+const wafHTML = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <link rel="icon" href="/favicon.png" />
+    <title>Jamf Protect</title>
+  </head>
+  <body><div id="app"></div></body>
+</html>`
+
+// TestAcc_WAF_TokenEndpoint_HTML verifies the full error message emitted when the
+// authentication endpoint is intercepted by a WAF and returns HTML instead of JSON.
+// Run with -v to print the verbatim message as it would appear in Terraform output.
+func TestAcc_WAF_TokenEndpoint_HTML(t *testing.T) {
+	t.Parallel()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		testWrite(t, w, []byte(wafHTML))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "test-client-id", "test-secret")
+	_, err := client.AccessToken(context.Background())
+
+	if err == nil {
+		t.Fatal("expected error from WAF HTML response on token endpoint, got nil")
+	}
+	if !errors.Is(err, ErrAuthentication) {
+		t.Errorf("expected ErrAuthentication in error chain, got: %v", err)
+	}
+	if !errors.Is(err, ErrUnexpectedResponse) {
+		t.Errorf("expected ErrUnexpectedResponse in error chain, got: %v", err)
+	}
+
+	t.Logf("\n--- verbatim error (token endpoint blocked) ---\n%s\n---", err.Error())
+}
+
+// TestAcc_WAF_GraphQLEndpoint_HTML verifies the full error message emitted when the
+// GraphQL endpoint is intercepted by a WAF during a resource read or apply.
+// Run with -v to print the verbatim message as it would appear in Terraform output.
+func TestAcc_WAF_GraphQLEndpoint_HTML(t *testing.T) {
+	t.Parallel()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		testEncodeJSON(t, w, map[string]any{"access_token": "tok", "expires_in": 3600})
+	})
+	mux.HandleFunc("/app", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		testWrite(t, w, []byte(wafHTML))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := NewClient(srv.URL, "test-client-id", "test-secret")
+	err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, nil)
+
+	if err == nil {
+		t.Fatal("expected error from WAF HTML response on GraphQL endpoint, got nil")
+	}
+	if !errors.Is(err, ErrUnexpectedResponse) {
+		t.Errorf("expected ErrUnexpectedResponse in error chain, got: %v", err)
+	}
+
+	t.Logf("\n--- verbatim error (GraphQL endpoint blocked) ---\n%s\n---", err.Error())
+}
+
 func TestClient_Authenticate_HTMLBody(t *testing.T) {
 	t.Parallel()
 

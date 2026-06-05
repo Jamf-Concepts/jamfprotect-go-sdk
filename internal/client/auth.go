@@ -152,7 +152,7 @@ func (c *Client) fetchToken(ctx context.Context) (*Token, error) {
 	}
 
 	if !looksLikeJSON(respBody) {
-		return nil, fmt.Errorf("%w (status %d, content-type %q): %.256s",
+		return nil, fmt.Errorf("%w (status %d, content-type %q); the authentication endpoint returned an HTML page instead of a JSON response — this is typically caused by a security policy blocking the request from your host's IP address: %.256s",
 			ErrUnexpectedResponse, resp.StatusCode, resp.Header.Get("Content-Type"), string(respBody))
 	}
 
