@@ -129,7 +129,7 @@ func (c *Client) DoGraphQL(ctx context.Context, path, query string, variables ma
 	}
 
 	if !looksLikeJSON(respBody) {
-		return fmt.Errorf("%w (status %d, content-type %q): %.256s",
+		return fmt.Errorf("%w (status %d, content-type %q); the API returned an HTML page instead of a JSON response — this is typically caused by a security policy blocking the request from your host's IP address: %.256s",
 			ErrUnexpectedResponse, resp.StatusCode, resp.Header.Get("Content-Type"), string(respBody))
 	}
 
