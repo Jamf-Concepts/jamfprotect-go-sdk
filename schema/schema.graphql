@@ -986,6 +986,7 @@ type OrganizationDownload {
 	websocket_auth: String
 	installerUuid: ID
 	tamperPreventionProfile: String
+	networkContentFilterProfile: String
 }
 input OrganizationForwardInput {
 	s3: OrganizationS3ForwardInput!

@@ -23,6 +23,7 @@ fragment OrganizationDownloadsFields on OrganizationDownload {
 	}
 	websocket_auth
 	tamperPreventionProfile
+	networkContentFilterProfile
 }
 `
 
@@ -45,13 +46,14 @@ type VanillaPackage struct {
 
 // OrganizationDownloads represents a Jamf Protect organizationDownloads.
 type OrganizationDownloads struct {
-	PPPC                    string          `json:"pppc"`
-	RootCA                  string          `json:"rootCA"`
-	CSR                     string          `json:"csr"`
-	InstallerUUID           string          `json:"installerUuid"`
-	VanillaPackage          *VanillaPackage `json:"vanillaPackage"`
-	WebsocketAuth           string          `json:"websocket_auth"`
-	TamperPreventionProfile string          `json:"tamperPreventionProfile"`
+	PPPC                        string          `json:"pppc"`
+	RootCA                      string          `json:"rootCA"`
+	CSR                         string          `json:"csr"`
+	InstallerUUID               string          `json:"installerUuid"`
+	VanillaPackage              *VanillaPackage `json:"vanillaPackage"`
+	WebsocketAuth               string          `json:"websocket_auth"`
+	TamperPreventionProfile     string          `json:"tamperPreventionProfile"`
+	NetworkContentFilterProfile string          `json:"networkContentFilterProfile"`
 }
 
 // ── Client methods ────────────────────────────────────────────────────────────
