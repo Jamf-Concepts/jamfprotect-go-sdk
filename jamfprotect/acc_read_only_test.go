@@ -34,6 +34,9 @@ func TestAcc_Downloads_Get(t *testing.T) {
 	if downloads.InstallerUUID == "" {
 		t.Fatal("GetOrganizationDownloads: expected non-empty InstallerUUID")
 	}
+	if downloads.NetworkContentFilterProfile == "" {
+		t.Fatal("GetOrganizationDownloads: expected non-empty NetworkContentFilterProfile")
+	}
 }
 
 func TestAcc_Connections_List(t *testing.T) {

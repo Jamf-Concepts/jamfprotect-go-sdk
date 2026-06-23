@@ -332,7 +332,7 @@
       "file": "downloads.go",
       "typeName": "OrganizationDownloads",
       "gqlTypeName": "OrganizationDownload",
-      "fields": ["pppc", "rootCA", "csr", "installerUuid", "vanillaPackage", "websocket_auth", "tamperPreventionProfile"],
+      "fields": ["pppc", "rootCA", "csr", "installerUuid", "vanillaPackage", "websocket_auth", "tamperPreventionProfile", "networkContentFilterProfile"],
       "nestedTypes": [
         {
           "schemaName": "VanillaPackage",
