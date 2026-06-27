@@ -495,8 +495,9 @@
         {"schemaName": "AnalyticActions", "goName": "AnalyticAction"},
         {"schemaName": "AnalyticContext", "goName": "AnalyticContext"}
       ],
-      "nullableInputFields": ["startup"],
+      "nullableInputFields": ["startup", "tenantSeverity"],
       "optionalInputFields": ["label", "longDescription", "startup", "remediation", "matchReason", "tenantActions", "tenantSeverity"],
+      "explicitNullInputFields": ["tenantActions", "tenantSeverity"],
       "inputTypeRenames": {
         "AnalyticActionsInput": "AnalyticActionInput"
       },

@@ -147,8 +147,10 @@ type AnalyticContextInput struct {
 
 // InternalAnalyticInput is the input for internalAnalytic operations.
 type InternalAnalyticInput struct {
-	TenantActions  []AnalyticActionInput
-	TenantSeverity string
+	TenantActions      []AnalyticActionInput
+	TenantActionsNull  bool
+	TenantSeverity     *string
+	TenantSeverityNull bool
 }
 
 // ── Response types ────────────────────────────────────────────────────────────
@@ -304,11 +306,15 @@ func buildAnalyticVariables(input AnalyticInput) map[string]any {
 
 func buildInternalAnalyticVariables(input InternalAnalyticInput) map[string]any {
 	vars := map[string]any{}
-	if input.TenantActions != nil {
+	if input.TenantActionsNull {
+		vars["tenantActions"] = nil
+	} else if input.TenantActions != nil {
 		vars["tenantActions"] = input.TenantActions
 	}
-	if input.TenantSeverity != "" {
-		vars["tenantSeverity"] = input.TenantSeverity
+	if input.TenantSeverityNull {
+		vars["tenantSeverity"] = nil
+	} else if input.TenantSeverity != nil {
+		vars["tenantSeverity"] = *input.TenantSeverity
 	}
 	return vars
 }

@@ -78,13 +78,15 @@ func buildInputTypesAndHelpers(schema *ast.Schema, res ResourceConfig, scalars m
 
 			// Knob A: explicitNullInputFields emits a value field + a FooNull bool sentinel.
 			if explicitNullFields[f.Name] {
+				isSlice := strings.HasPrefix(goType, "[]")
 				fields = append(fields, IRField{Name: goName, Type: goType})
 				fields = append(fields, IRField{Name: goName + "Null", Type: "bool"})
 				buildVars = append(buildVars, BuildVar{
 					Key:          f.Name,
 					GoAccess:     goName,
 					Optional:     true,
-					IsPtr:        true,
+					IsPtr:        !isSlice,
+					IsSlice:      isSlice,
 					ExplicitNull: true,
 				})
 			} else {
@@ -286,9 +288,14 @@ func buildVarsFuncBody(vars []BuildVar) string {
 	b.WriteString("\t}\n")
 	for _, v := range optional {
 		if v.ExplicitNull {
-			// Tri-state: NullSentinel → pass nil, ptr non-nil → pass value, else → omit.
-			fmt.Fprintf(&b, "\tif input.%sNull {\n\t\tvars[%q] = nil\n\t} else if input.%s != nil {\n\t\tvars[%q] = *input.%s\n\t}\n",
-				v.GoAccess, v.Key, v.GoAccess, v.Key, v.GoAccess)
+			// Tri-state: NullSentinel → pass nil, non-nil → pass value, else → omit.
+			if v.IsSlice {
+				fmt.Fprintf(&b, "\tif input.%sNull {\n\t\tvars[%q] = nil\n\t} else if input.%s != nil {\n\t\tvars[%q] = input.%s\n\t}\n",
+					v.GoAccess, v.Key, v.GoAccess, v.Key, v.GoAccess)
+			} else {
+				fmt.Fprintf(&b, "\tif input.%sNull {\n\t\tvars[%q] = nil\n\t} else if input.%s != nil {\n\t\tvars[%q] = *input.%s\n\t}\n",
+					v.GoAccess, v.Key, v.GoAccess, v.Key, v.GoAccess)
+			}
 		} else if v.IsPtr {
 			fmt.Fprintf(&b, "\tif input.%s != nil {\n\t\tvars[%q] = *input.%s\n\t}\n", v.GoAccess, v.Key, v.GoAccess)
 		} else if v.IsSlice {

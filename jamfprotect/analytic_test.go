@@ -326,12 +326,13 @@ func TestUpdateInternalAnalytic(t *testing.T) {
 		return map[string]any{"updateInternalAnalytic": payload}
 	})
 
+	severity := "Low"
 	got, err := client.UpdateInternalAnalytic(context.Background(), uuid, InternalAnalyticInput{
 		TenantActions: []AnalyticActionInput{
 			{Name: "Report", Parameters: "{}"},
 			{Name: "SmartGroup", Parameters: `{"id":"yes"}`},
 		},
-		TenantSeverity: "Low",
+		TenantSeverity: &severity,
 	})
 	if err != nil {
 		t.Fatalf("UpdateInternalAnalytic: %v", err)
@@ -367,8 +368,9 @@ func TestUpdateInternalAnalytic_OnlySeverity(t *testing.T) {
 		return map[string]any{"updateInternalAnalytic": payload}
 	})
 
+	severity := "High"
 	_, err := client.UpdateInternalAnalytic(context.Background(), "u1", InternalAnalyticInput{
-		TenantSeverity: "High",
+		TenantSeverity: &severity,
 	})
 	if err != nil {
 		t.Fatalf("UpdateInternalAnalytic: %v", err)
@@ -409,8 +411,9 @@ func TestUpdateInternalAnalytic_Error(t *testing.T) {
 
 	_, client := testServerError(t, "permission denied")
 
+	severity := "High"
 	_, err := client.UpdateInternalAnalytic(context.Background(), "u1", InternalAnalyticInput{
-		TenantSeverity: "High",
+		TenantSeverity: &severity,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
