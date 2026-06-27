@@ -123,14 +123,19 @@ func TestAcc_Analytic_UpdateInternal(t *testing.T) {
 	originalSeverity := target.TenantSeverity
 
 	t.Cleanup(func() {
-		restoreInput := InternalAnalyticInput{
-			TenantSeverity: originalSeverity,
+		restoreInput := InternalAnalyticInput{}
+		if originalSeverity != "" {
+			restoreInput.TenantSeverity = &originalSeverity
+		} else {
+			restoreInput.TenantSeverityNull = true
 		}
-		if originalActions != nil {
+		if len(originalActions) > 0 {
 			restoreInput.TenantActions = make([]AnalyticActionInput, 0, len(originalActions))
 			for _, a := range originalActions {
 				restoreInput.TenantActions = append(restoreInput.TenantActions, AnalyticActionInput(a))
 			}
+		} else {
+			restoreInput.TenantActionsNull = true
 		}
 		if _, err := client.UpdateInternalAnalytic(context.Background(), target.UUID, restoreInput); err != nil {
 			t.Errorf("cleanup UpdateInternalAnalytic: %v", err)
@@ -147,7 +152,7 @@ func TestAcc_Analytic_UpdateInternal(t *testing.T) {
 
 	updated, err := client.UpdateInternalAnalytic(ctx, target.UUID, InternalAnalyticInput{
 		TenantActions:  newActions,
-		TenantSeverity: newSeverity,
+		TenantSeverity: &newSeverity,
 	})
 	if err != nil {
 		t.Fatalf("UpdateInternalAnalytic: %v", err)
