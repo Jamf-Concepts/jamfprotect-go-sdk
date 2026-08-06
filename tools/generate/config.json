@@ -20,21 +20,28 @@
       "file": "unified_logging_filter.go",
       "typeName": "UnifiedLoggingFilter",
       "idField": "uuid",
-      "fields": ["uuid", "name", "description", "created", "updated", "filter", "tags", "enabled"],
+      "fields": ["uuid", "name", "description", "created", "updated", "filter", "tags", "enabled", "sets"],
       "inputFields": ["name", "description", "filter", "tags", "enabled"],
+      "nestedTypes": [
+        {
+          "schemaName": "UnifiedLoggingFilterSet",
+          "goName": "UnifiedLoggingFilterSetRef",
+          "fields": ["uuid", "name"]
+        }
+      ],
       "operations": [
         {
           "name": "GetUnifiedLoggingFilter",
           "gqlName": "getUnifiedLoggingFilter",
           "kind": "get",
-          "endpoint": "/graphql",
+          "endpoint": "/app",
           "resultKey": "getUnifiedLoggingFilter"
         },
         {
           "name": "CreateUnifiedLoggingFilter",
           "gqlName": "createUnifiedLoggingFilter",
           "kind": "create",
-          "endpoint": "/graphql",
+          "endpoint": "/app",
           "resultKey": "createUnifiedLoggingFilter",
           "inputType": "UnifiedLoggingFilterInput"
         },
@@ -42,7 +49,7 @@
           "name": "UpdateUnifiedLoggingFilter",
           "gqlName": "updateUnifiedLoggingFilter",
           "kind": "update",
-          "endpoint": "/graphql",
+          "endpoint": "/app",
           "resultKey": "updateUnifiedLoggingFilter",
           "inputType": "UnifiedLoggingFilterInput"
         },
@@ -50,15 +57,74 @@
           "name": "DeleteUnifiedLoggingFilter",
           "gqlName": "deleteUnifiedLoggingFilter",
           "kind": "delete",
-          "endpoint": "/graphql",
+          "endpoint": "/app",
           "resultKey": "deleteUnifiedLoggingFilter"
         },
         {
           "name": "ListUnifiedLoggingFilters",
           "gqlName": "listUnifiedLoggingFilters",
           "kind": "list",
-          "endpoint": "/graphql",
+          "endpoint": "/app",
           "resultKey": "listUnifiedLoggingFilters",
+          "pagination": true,
+          "paginationVars": {
+            "direction": "ASC",
+            "field": "name",
+            "filter": {},
+            "pageSize": 100
+          }
+        }
+      ]
+    },
+    {
+      "file": "unified_logging_filter_set.go",
+      "typeName": "UnifiedLoggingFilterSet",
+      "idField": "uuid",
+      "fields": ["uuid", "name", "description", "created", "updated", "filters", "plans"],
+      "nestedTypes": [
+        {
+          "schemaName": "UnifiedLoggingFilter",
+          "goName": "UnifiedLoggingFilterSetFilter",
+          "fields": ["uuid", "name"]
+        },
+        {
+          "schemaName": "Plan",
+          "goName": "UnifiedLoggingFilterSetPlan",
+          "fields": ["id", "name"]
+        }
+      ],
+      "operations": [
+        {
+          "name": "GetUnifiedLoggingFilterSet",
+          "gqlName": "getUnifiedLoggingFilterSet",
+          "kind": "get",
+          "endpoint": "/app"
+        },
+        {
+          "name": "CreateUnifiedLoggingFilterSet",
+          "gqlName": "createUnifiedLoggingFilterSet",
+          "kind": "create",
+          "endpoint": "/app",
+          "inputType": "UnifiedLoggingFilterSetInput"
+        },
+        {
+          "name": "UpdateUnifiedLoggingFilterSet",
+          "gqlName": "updateUnifiedLoggingFilterSet",
+          "kind": "update",
+          "endpoint": "/app",
+          "inputType": "UnifiedLoggingFilterSetInput"
+        },
+        {
+          "name": "DeleteUnifiedLoggingFilterSet",
+          "gqlName": "deleteUnifiedLoggingFilterSet",
+          "kind": "delete",
+          "endpoint": "/app"
+        },
+        {
+          "name": "ListUnifiedLoggingFilterSets",
+          "gqlName": "listUnifiedLoggingFilterSets",
+          "kind": "list",
+          "endpoint": "/app",
           "pagination": true,
           "paginationVars": {
             "direction": "ASC",
@@ -1318,7 +1384,7 @@
     {
       "file": "plan.go",
       "typeName": "Plan",
-      "fields": ["id","uuid","hash","name","description","created","updated","logLevel","profileVersion","autoUpdate","threatPreventionStrategy","customEngineConfig","commsConfig","infoSync","signaturesFeedConfig","actionConfigs","exceptionSets","usbControlSet","telemetry","telemetryV2","analyticSets"],
+      "fields": ["id","uuid","hash","name","description","created","updated","logLevel","profileVersion","autoUpdate","threatPreventionStrategy","customEngineConfig","commsConfig","infoSync","signaturesFeedConfig","actionConfigs","exceptionSets","usbControlSet","telemetry","telemetryV2","analyticSets","unifiedLoggingFilterSets"],
       "nestedTypes": [
         {"schemaName": "CommsConfig", "goName": "PlanCommsConfig"},
         {"schemaName": "infoSync", "goName": "PlanInfoSync", "fields": ["attrs", "insightsSyncInterval"]},
@@ -1329,7 +1395,8 @@
         {"schemaName": "Telemetry", "goName": "PlanRef", "fields": ["id","name"], "path": "telemetry"},
         {"schemaName": "TelemetryV2", "goName": "PlanRef", "fields": ["id","name"], "path": "telemetryV2"},
         {"schemaName": "Analytic", "goName": "PlanAnalytic", "fields": ["uuid","categories"], "path": "analyticSets.analyticSet.analytics"},
-        {"schemaName": "AnalyticSet", "goName": "PlanAnalyticSetRef", "fields": ["uuid","name","managed","analytics"], "path": "analyticSets.analyticSet"}
+        {"schemaName": "AnalyticSet", "goName": "PlanAnalyticSetRef", "fields": ["uuid","name","managed","analytics"], "path": "analyticSets.analyticSet"},
+        {"schemaName": "UnifiedLoggingFilterSet", "goName": "PlanUnifiedLoggingFilterSet", "fields": ["uuid","name"], "path": "unifiedLoggingFilterSets"}
       ],
       "inputTypeRenames": {
         "CommsConfigInput": "PlanCommsConfigInput",
@@ -1345,7 +1412,7 @@
         }
       },
       "nullableInputFields": ["logLevel","telemetry","telemetryV2","usbControlSet","customEngineConfig","configVersion"],
-      "optionalInputFields": ["logLevel","exceptionSets","telemetry","telemetryV2","analyticSets","usbControlSet","threatPreventionStrategy","customEngineConfig","configVersion"],
+      "optionalInputFields": ["logLevel","exceptionSets","telemetry","telemetryV2","analyticSets","unifiedLoggingFilterSets","usbControlSet","threatPreventionStrategy","customEngineConfig","configVersion"],
       "explicitNullInputFields": ["telemetryV2"],
       "nullableNestedInputFields": {"InfoSyncInput": ["infoSyncInterval"]},
       "operations": [

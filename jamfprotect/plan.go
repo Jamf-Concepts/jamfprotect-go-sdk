@@ -78,6 +78,10 @@ fragment PlanFields on Plan {
 			}
 		}
 	}
+	unifiedLoggingFilterSets {
+		uuid
+		name
+	}
 }
 `
 
@@ -145,6 +149,7 @@ type PlanInput struct {
 	LogLevel                 *string
 	ExceptionSets            []string
 	AnalyticSets             []PlanAnalyticSetInput
+	UnifiedLoggingFilterSets []string
 	Telemetry                *string
 	TelemetryV2              *string
 	TelemetryV2Null          bool
@@ -257,6 +262,12 @@ type PlanAnalyticSet struct {
 	AnalyticSet PlanAnalyticSetRef `json:"analyticSet"`
 }
 
+// PlanUnifiedLoggingFilterSet contains UnifiedLoggingFilterSet data.
+type PlanUnifiedLoggingFilterSet struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
 // PlanAnalyticSetRef contains AnalyticSet data.
 type PlanAnalyticSetRef struct {
 	UUID      string         `json:"uuid"`
@@ -273,27 +284,28 @@ type PlanAnalytic struct {
 
 // Plan represents a Jamf Protect plan.
 type Plan struct {
-	ID                       string              `json:"id"`
-	UUID                     string              `json:"uuid"`
-	Hash                     string              `json:"hash"`
-	Name                     string              `json:"name"`
-	Description              string              `json:"description"`
-	Created                  string              `json:"created"`
-	Updated                  string              `json:"updated"`
-	LogLevel                 string              `json:"logLevel"`
-	ProfileVersion           int64               `json:"profileVersion"`
-	AutoUpdate               bool                `json:"autoUpdate"`
-	ThreatPreventionStrategy string              `json:"threatPreventionStrategy"`
-	CustomEngineConfig       *CustomEngineConfig `json:"customEngineConfig"`
-	CommsConfig              *PlanCommsConfig    `json:"commsConfig"`
-	InfoSync                 *PlanInfoSync       `json:"infoSync"`
-	SignaturesFeedConfig     *PlanSignaturesFeed `json:"signaturesFeedConfig"`
-	ActionConfigs            *PlanRef            `json:"actionConfigs"`
-	ExceptionSets            []PlanExceptionSet  `json:"exceptionSets"`
-	USBControlSet            *PlanRef            `json:"usbControlSet"`
-	Telemetry                *PlanRef            `json:"telemetry"`
-	TelemetryV2              *PlanRef            `json:"telemetryV2"`
-	AnalyticSets             []PlanAnalyticSet   `json:"analyticSets"`
+	ID                       string                        `json:"id"`
+	UUID                     string                        `json:"uuid"`
+	Hash                     string                        `json:"hash"`
+	Name                     string                        `json:"name"`
+	Description              string                        `json:"description"`
+	Created                  string                        `json:"created"`
+	Updated                  string                        `json:"updated"`
+	LogLevel                 string                        `json:"logLevel"`
+	ProfileVersion           int64                         `json:"profileVersion"`
+	AutoUpdate               bool                          `json:"autoUpdate"`
+	ThreatPreventionStrategy string                        `json:"threatPreventionStrategy"`
+	CustomEngineConfig       *CustomEngineConfig           `json:"customEngineConfig"`
+	CommsConfig              *PlanCommsConfig              `json:"commsConfig"`
+	InfoSync                 *PlanInfoSync                 `json:"infoSync"`
+	SignaturesFeedConfig     *PlanSignaturesFeed           `json:"signaturesFeedConfig"`
+	ActionConfigs            *PlanRef                      `json:"actionConfigs"`
+	ExceptionSets            []PlanExceptionSet            `json:"exceptionSets"`
+	USBControlSet            *PlanRef                      `json:"usbControlSet"`
+	Telemetry                *PlanRef                      `json:"telemetry"`
+	TelemetryV2              *PlanRef                      `json:"telemetryV2"`
+	AnalyticSets             []PlanAnalyticSet             `json:"analyticSets"`
+	UnifiedLoggingFilterSets []PlanUnifiedLoggingFilterSet `json:"unifiedLoggingFilterSets"`
 }
 
 // ── Client methods ────────────────────────────────────────────────────────────
@@ -390,6 +402,9 @@ func buildPlanVariables(input PlanInput) map[string]any {
 	}
 	if input.AnalyticSets != nil {
 		vars["analyticSets"] = input.AnalyticSets
+	}
+	if input.UnifiedLoggingFilterSets != nil {
+		vars["unifiedLoggingFilterSets"] = input.UnifiedLoggingFilterSets
 	}
 	if input.Telemetry != nil {
 		vars["telemetry"] = *input.Telemetry

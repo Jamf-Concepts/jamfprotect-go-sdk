@@ -568,6 +568,7 @@ enum ComputerOrderField {
 	fullDiskAccess
 	pendingPlan
 	checkInstallation
+	dlpVersion
 }
 input ComputerOrderInput {
 	direction: OrderDirection!
@@ -1051,6 +1052,7 @@ type Plan {
 	telemetryV2: TelemetryV2
 	autoUpdate: Boolean
 	analyticSets: [PlanAnalyticSet!]
+	unifiedLoggingFilterSets: [UnifiedLoggingFilterSet!]
 	infoSync: infoSync
 	commsConfig: CommsConfig
 	signaturesFeedConfig: SignaturesFeedConfig
@@ -1091,6 +1093,7 @@ input PlanInput {
 	logLevel: LOG_LEVEL_ENUM
 	exceptionSets: [ID!]
 	analyticSets: [PlanAnalyticSetInput!]
+	unifiedLoggingFilterSets: [ID!]
 	telemetry: ID
 	telemetryV2: ID
 	autoUpdate: Boolean
@@ -1229,11 +1232,13 @@ enum RBAC_RESOURCE {
 	Package
 	Plan
 	PreventList
+	DLPPolicy
 	Role
 	Telemetry
 	ThreatPreventionVersion
 	USBControlSet
 	UnifiedLoggingFilter
+	UnifiedLoggingFilterSet
 	UninstallerToken
 	User
 }
@@ -1373,8 +1378,8 @@ input TableDatetimeFilterInput {
 }
 input TableIdFilterInput {
 	isNull: Boolean
-	equals: String
-	notEqual: String
+	equals: ID
+	notEqual: ID
 }
 input TableIntFilterInput {
 	isNull: Boolean
@@ -1549,6 +1554,7 @@ type UnifiedLoggingFilter {
 	filter: String
 	tags: [String]
 	enabled: Boolean
+	sets: [UnifiedLoggingFilterSet!]
 }
 type UnifiedLoggingFilterConnection {
 	items: [UnifiedLoggingFilter]
@@ -1561,6 +1567,49 @@ input UnifiedLoggingFilterInput {
 	tags: [String]!
 	enabled: Boolean
 	level: UNIFIED_LOGGING_LEVEL
+}
+type UnifiedLoggingFilterSet {
+	uuid: ID!
+	name: String!
+	description: String
+	filters: [UnifiedLoggingFilter!]
+	plans: [Plan!]
+	created: AWSDateTime!
+	updated: AWSDateTime!
+}
+type UnifiedLoggingFilterSetConnection {
+	items: [UnifiedLoggingFilterSet]
+	pageInfo: PageInfo
+}
+input UnifiedLoggingFilterSetFiltersInput {
+	name: TableStringFilterInput
+	description: TableStringFilterInput
+	plans: TableStringArrayFilterInput
+	filters: TableStringArrayFilterInput
+	created: TableDatetimeFilterInput
+	updated: TableDatetimeFilterInput
+	or: [UnifiedLoggingFilterSetFiltersInput!]
+	and: [UnifiedLoggingFilterSetFiltersInput!]
+}
+input UnifiedLoggingFilterSetInput {
+	name: String!
+	description: String
+	filters: [ID!]!
+}
+enum UnifiedLoggingFilterSetOrderField {
+	name
+	created
+	updated
+}
+input UnifiedLoggingFilterSetOrderInput {
+	direction: OrderDirection!
+	field: UnifiedLoggingFilterSetOrderField!
+}
+input UnifiedLoggingFilterSetsQueryInput {
+	next: String
+	order: UnifiedLoggingFilterSetOrderInput
+	filter: UnifiedLoggingFilterSetFiltersInput
+	pageSize: Int
 }
 input UnifiedLoggingFiltersFilterInput {
 	name: TableStringFilterInput
@@ -1676,6 +1725,7 @@ type Mutation {
 	createTelemetryV2(input: TelemetryInputV2!): TelemetryV2
 	createUSBControlSet(input: USBControlSetInput!): USBControlSet
 	createUnifiedLoggingFilter(input: UnifiedLoggingFilterInput!): UnifiedLoggingFilter
+	createUnifiedLoggingFilterSet(input: UnifiedLoggingFilterSetInput!): UnifiedLoggingFilterSet
 	createUser(input: UserCreateInput!): User
 	deleteActionConfigs(id: ID!): ActionConfigs
 	deleteAnalytic(uuid: ID!): Analytic
@@ -1690,6 +1740,7 @@ type Mutation {
 	deleteTelemetryV2(id: ID!): TelemetryV2
 	deleteUSBControlSet(id: ID!): USBControlSet
 	deleteUnifiedLoggingFilter(uuid: ID!): UnifiedLoggingFilter
+	deleteUnifiedLoggingFilterSet(uuid: ID!): UnifiedLoggingFilterSet
 	deleteUser(id: ID!): User
 	setComputerPlan(input: ComputerPlan!, uuid: ID!): Computer
 	updateActionConfigs(id: ID!, input: ActionConfigsInput!): ActionConfigs
@@ -1712,6 +1763,7 @@ type Mutation {
 	updateTelemetryV2(id: ID!, input: TelemetryInputV2!): TelemetryV2
 	updateUSBControlSet(id: ID!, input: USBControlSetInput!): USBControlSet
 	updateUnifiedLoggingFilter(uuid: ID!, input: UnifiedLoggingFilterInput!): UnifiedLoggingFilter
+	updateUnifiedLoggingFilterSet(uuid: ID!, input: UnifiedLoggingFilterSetInput!): UnifiedLoggingFilterSet
 	updateUser(id: ID!, input: UserUpdateInput!): User
 }
 type Query {
@@ -1737,6 +1789,7 @@ type Query {
 	getTelemetryV2(id: ID!): TelemetryV2
 	getUSBControlSet(id: ID!): USBControlSet
 	getUnifiedLoggingFilter(uuid: ID!): UnifiedLoggingFilter
+	getUnifiedLoggingFilterSet(uuid: ID!): UnifiedLoggingFilterSet
 	getUser(id: ID!): User
 	listActionConfigs(input: ActionConfigsQueryInput): ActionConfigsConnection
 	listAlerts(input: AlertQueryInput!): AlertConnection
@@ -1756,6 +1809,7 @@ type Query {
 	listRoles(input: RoleQueryInput): RoleConnection
 	listTelemetriesV2(input: TelemetryQueryInput): TelemetryConnectionV2
 	listUSBControlSets(input: USBControlSetsQueryInput): USBControlSetConnection
+	listUnifiedLoggingFilterSets(input: UnifiedLoggingFilterSetsQueryInput): UnifiedLoggingFilterSetConnection
 	listUnifiedLoggingFilters(input: UnifiedLoggingFiltersListQueryInput): UnifiedLoggingFilterConnection
 	listUsers(input: UserQueryInput): UserConnection
 }
