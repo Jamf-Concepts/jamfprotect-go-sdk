@@ -37,6 +37,23 @@ jobs:
           go-version-file: go.mod
       - uses: golangci/golangci-lint-action@v9
 
+  generator:
+    name: Generator Module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: tools/generate/go.mod
+          cache-dependency-path: tools/generate/go.sum
+      - run: go test -v -cover -count=1 -timeout=120s ./...
+        working-directory: tools/generate
+      - run: go vet ./...
+        working-directory: tools/generate
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          working-directory: tools/generate
+
   mod-tidy:
     name: Go Mod Tidy
     runs-on: ubuntu-latest
@@ -49,6 +66,8 @@ jobs:
       - run: git diff --exit-code go.mod go.sum
       - run: cd tools && go mod tidy
       - run: git diff --exit-code tools/go.mod tools/go.sum
+      - run: cd tools/generate && go mod tidy
+      - run: git diff --exit-code tools/generate/go.mod tools/generate/go.sum
 
   copyright:
     name: Copyright Headers
