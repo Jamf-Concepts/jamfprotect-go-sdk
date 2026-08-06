@@ -37,7 +37,7 @@ func buildQueryStr(schema *ast.Schema, op OperationConfig, res ResourceConfig, g
 	// Extra var declarations are added to ops that use the fragment.
 	// Delete ops and list ops with custom inline fields don't use the fragment, so skip extraVars.
 	extraDecls := ""
-	if kind != "delete" && !(kind == "list" && len(op.ListItemFields) > 0) {
+	if kind != "delete" && (kind != "list" || len(op.ListItemFields) == 0) {
 		extraDecls = extraVarDeclStr(res.ExtraVars)
 	}
 

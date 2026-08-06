@@ -65,7 +65,7 @@ func TestFormatGoLiteralDeterministic(t *testing.T) {
 		"v": 5.0, "u": 6.0, "t": 7.0, "s": 8.0,
 	}
 	first := formatGoLiteral(in)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		if got := formatGoLiteral(in); got != first {
 			t.Fatalf("non-deterministic output:\n run 1: %s\n run %d: %s", first, i+2, got)
 		}
