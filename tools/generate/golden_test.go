@@ -176,12 +176,12 @@ func TestGolden_DashboardLike(t *testing.T) {
 						"computers": map[string]any{"or": []any{}},
 					},
 				},
-				ReturnNullable: ptrBool(false),
+				ReturnNullable: new(false),
 			},
 			{
 				Name: "GetMiniComputerCount", GQLName: "getMiniComputerCount", Kind: "singleton_get",
 				ResultKey:  "getMiniComputerCount",
-				ReturnType: "int64", ReturnNullable: ptrBool(false),
+				ReturnType: "int64", ReturnNullable: new(false),
 				ResultPath: "getMiniComputerCount.computers", ResultPathLeaf: true, NoFragment: true,
 			},
 			{
@@ -197,5 +197,3 @@ func TestGolden_DashboardLike(t *testing.T) {
 	got := renderResource(t, cfg, res, sdl)
 	assertGolden(t, filepath.Join("testdata", "mini_dashboard.go.golden"), got)
 }
-
-func ptrBool(b bool) *bool { return &b }

@@ -19,3 +19,8 @@ updates:
     directory: "/tools"
     schedule:
       interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    directory: "/tools/generate"
+    schedule:
+      interval: "weekly"
