@@ -23,6 +23,7 @@ Detailed field-by-field comparison of every implemented resource against the sch
 | TelemetryV2 | telemetryV2 |
 | TelemetryV2Null _(helper flag, not in schema)_ | — |
 | AnalyticSets | analyticSets |
+| UnifiedLoggingFilterSets | unifiedLoggingFilterSets |
 | USBControlSet | usbControlSet |
 | CommsConfig | commsConfig |
 | InfoSync | infoSync |
@@ -52,6 +53,7 @@ Detailed field-by-field comparison of every implemented resource against the sch
 | Telemetry | telemetry |
 | TelemetryV2 | telemetryV2 |
 | AnalyticSets | analyticSets |
+| UnifiedLoggingFilterSets | unifiedLoggingFilterSets |
 | — | **uuid** (missing) |
 | — | **profileVersion** (missing) |
 | — | **analytics** (missing) |
@@ -540,7 +542,21 @@ Status: Perfect match on both input and response types. All fields aligned.
 
 ### UnifiedLoggingFilter (`unified_logging_filter.go`)
 
+Status: Response type aligned, including the `sets` reverse lookup added with filter sets. `UnifiedLoggingFilterInput.level` (`UNIFIED_LOGGING_LEVEL`: `DEFAULT`, `INFO`) is not exposed on the Go input type, and `level` is not selected in the response.
+
+Operations use `/app` rather than `/graphql` — the limited schema has no `UnifiedLoggingFilter.sets`.
+
+Note that `enabled` is retained for backwards compatibility only. It no longer controls whether a filter ships to endpoints; filters reach endpoints via set membership plus Plan assignment.
+
+---
+
+### UnifiedLoggingFilterSet (`unified_logging_filter_set.go`)
+
 Status: Perfect match on both input and response types. All fields aligned.
+
+Full CRUD on `/app`. The limited `/graphql` schema exposes only `listUnifiedLoggingFilterSets`, `createUnifiedLoggingFilterSet`, and `updateUnifiedLoggingFilterSet` — get and delete are `/app` only.
+
+Server-side constraints: a set assigned to a Plan cannot be deleted; deleting a member filter silently drops it from the set; `filters` UUIDs are not validated on write.
 
 ---
 
@@ -572,6 +588,7 @@ Status: Perfect match. `OrganizationDownloads` and `VanillaPackage` structs alig
 | **Analytic** | `label`, `longDescription`, `startup`, `remediation`, `matchReason` | `hash`, `startup`, `udm`, `exceptions`, `matchReason`, `osVersion`, `extVersion`, `plans`, `analyticSets` |
 | **Computer** | _(read-only)_ | `insights`, `insightsStatsPass`, `insightsStatsUnknown`, `scorecard`, `insightsReport`, `insightsIssueCount`, `provisioningUDID` |
 | **ActionConfig** | — | `plans` |
+| **UnifiedLoggingFilter** | `level` | `level` |
 | **Exception** | — | `exceptionSet`, `created`, `updated` |
 | **EsException** | — | `exceptionSet`, `created`, `updated` |
 | **DataRetention** | — | `recordCount` on `DbStorageRetention` |
@@ -587,7 +604,7 @@ Status: Perfect match. `OrganizationDownloads` and `VanillaPackage` structs alig
 - DataForwarding
 - AnalyticSet
 - CustomPreventList
-- UnifiedLoggingFilter
+- UnifiedLoggingFilterSet
 - ApiClient
 - ChangeManagement
 - Downloads
@@ -694,11 +711,11 @@ Alerts are the core security output of Protect. No alert operations exist in the
 
 | Category | Schema | Implemented | Coverage |
 |---|---|---|---|
-| **Queries** | ~73 | ~22 | ~30% |
-| **Mutations** | ~62 | ~19 | ~31% |
-| **Full CRUD resources** | 17 | 14 | 82% |
+| **Queries** | ~75 | ~24 | ~32% |
+| **Mutations** | ~65 | ~22 | ~34% |
+| **Full CRUD resources** | 18 | 15 | 83% |
 
-**Resources with complete CRUD:** ActionConfig, Analytic, AnalyticSet, ApiClient, CustomPreventList, ExceptionSet, Group, Plan, RemovableStorageControlSet, Role, TelemetryV2, UnifiedLoggingFilter, User (13 resources)
+**Resources with complete CRUD:** ActionConfig, Analytic, AnalyticSet, ApiClient, CustomPreventList, ExceptionSet, Group, Plan, RemovableStorageControlSet, Role, TelemetryV2, UnifiedLoggingFilter, UnifiedLoggingFilterSet, User (14 resources)
 
 **Resources with partial implementation:** Computer (read-only), Connection (list-only), DataForwarding (get/update), DataRetention (get/update), ChangeManagement (get/update), Downloads (get-only)
 

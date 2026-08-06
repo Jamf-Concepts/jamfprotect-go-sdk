@@ -24,6 +24,10 @@ fragment UnifiedLoggingFilterFields on UnifiedLoggingFilter {
 	filter
 	tags
 	enabled
+	sets {
+		uuid
+		name
+	}
 }
 `
 
@@ -93,16 +97,23 @@ type UnifiedLoggingFilterInput struct {
 
 // ── Response types ────────────────────────────────────────────────────────────
 
+// UnifiedLoggingFilterSetRef contains UnifiedLoggingFilterSet data.
+type UnifiedLoggingFilterSetRef struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
 // UnifiedLoggingFilter represents a Jamf Protect unifiedLoggingFilter.
 type UnifiedLoggingFilter struct {
-	UUID        string   `json:"uuid"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Created     string   `json:"created"`
-	Updated     string   `json:"updated"`
-	Filter      string   `json:"filter"`
-	Tags        []string `json:"tags"`
-	Enabled     bool     `json:"enabled"`
+	UUID        string                       `json:"uuid"`
+	Name        string                       `json:"name"`
+	Description string                       `json:"description"`
+	Created     string                       `json:"created"`
+	Updated     string                       `json:"updated"`
+	Filter      string                       `json:"filter"`
+	Tags        []string                     `json:"tags"`
+	Enabled     bool                         `json:"enabled"`
+	Sets        []UnifiedLoggingFilterSetRef `json:"sets"`
 }
 
 // ── Client methods ────────────────────────────────────────────────────────────
@@ -113,7 +124,7 @@ func (c *Client) GetUnifiedLoggingFilter(ctx context.Context, uuid string) (*Uni
 	var result struct {
 		GetUnifiedLoggingFilter *UnifiedLoggingFilter `json:"getUnifiedLoggingFilter"`
 	}
-	if err := c.transport.DoGraphQL(ctx, "/graphql", getUnifiedLoggingFilterQuery, vars, &result); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", getUnifiedLoggingFilterQuery, vars, &result); err != nil {
 		return nil, fmt.Errorf("GetUnifiedLoggingFilter(%s): %w", uuid, err)
 	}
 	return result.GetUnifiedLoggingFilter, nil
@@ -125,7 +136,7 @@ func (c *Client) CreateUnifiedLoggingFilter(ctx context.Context, input UnifiedLo
 	var result struct {
 		CreateUnifiedLoggingFilter UnifiedLoggingFilter `json:"createUnifiedLoggingFilter"`
 	}
-	if err := c.transport.DoGraphQL(ctx, "/graphql", createUnifiedLoggingFilterMutation, vars, &result); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", createUnifiedLoggingFilterMutation, vars, &result); err != nil {
 		return UnifiedLoggingFilter{}, fmt.Errorf("CreateUnifiedLoggingFilter: %w", err)
 	}
 	return result.CreateUnifiedLoggingFilter, nil
@@ -138,7 +149,7 @@ func (c *Client) UpdateUnifiedLoggingFilter(ctx context.Context, uuid string, in
 	var result struct {
 		UpdateUnifiedLoggingFilter UnifiedLoggingFilter `json:"updateUnifiedLoggingFilter"`
 	}
-	if err := c.transport.DoGraphQL(ctx, "/graphql", updateUnifiedLoggingFilterMutation, vars, &result); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", updateUnifiedLoggingFilterMutation, vars, &result); err != nil {
 		return UnifiedLoggingFilter{}, fmt.Errorf("UpdateUnifiedLoggingFilter(%s): %w", uuid, err)
 	}
 	return result.UpdateUnifiedLoggingFilter, nil
@@ -147,7 +158,7 @@ func (c *Client) UpdateUnifiedLoggingFilter(ctx context.Context, uuid string, in
 // DeleteUnifiedLoggingFilter deletes a unifiedLoggingFilter by ID.
 func (c *Client) DeleteUnifiedLoggingFilter(ctx context.Context, uuid string) error {
 	vars := map[string]any{"uuid": uuid}
-	if err := c.transport.DoGraphQL(ctx, "/graphql", deleteUnifiedLoggingFilterMutation, vars, nil); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", deleteUnifiedLoggingFilterMutation, vars, nil); err != nil {
 		return fmt.Errorf("DeleteUnifiedLoggingFilter(%s): %w", uuid, err)
 	}
 	return nil
@@ -155,7 +166,7 @@ func (c *Client) DeleteUnifiedLoggingFilter(ctx context.Context, uuid string) er
 
 // ListUnifiedLoggingFilters retrieves all unifiedLoggingFilters.
 func (c *Client) ListUnifiedLoggingFilters(ctx context.Context) ([]UnifiedLoggingFilter, error) {
-	unifiedLoggingFilters, err := client.ListAll[UnifiedLoggingFilter](ctx, c.transport, "/graphql", listUnifiedLoggingFiltersQuery, map[string]any{
+	unifiedLoggingFilters, err := client.ListAll[UnifiedLoggingFilter](ctx, c.transport, "/app", listUnifiedLoggingFiltersQuery, map[string]any{
 		"direction": "ASC",
 		"field":     "name",
 		"filter":    map[string]any{},

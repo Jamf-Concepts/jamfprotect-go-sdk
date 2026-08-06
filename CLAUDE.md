@@ -110,7 +110,7 @@ Each resource file contains GraphQL queries/mutations as constants, Go types for
 
 ### Resource Coverage
 
-**Full CRUD:** ActionConfig, Analytic, AnalyticSet, ApiClient, CustomPreventList, ExceptionSet, Group, Plan, RemovableStorageControlSet, Role, TelemetryV2, UnifiedLoggingFilter, User
+**Full CRUD:** ActionConfig, Analytic, AnalyticSet, ApiClient, CustomPreventList, ExceptionSet, Group, Plan, RemovableStorageControlSet, Role, TelemetryV2, UnifiedLoggingFilter, UnifiedLoggingFilterSet, User
 
 **Read + Write (partial):** Computer (list, get, update, delete, setComputerPlan), Connection (list-only), DataForwarding (get/update), DataRetention (get/update), ChangeManagement (get/update), Downloads (get-only)
 
@@ -123,6 +123,21 @@ Each resource file contains GraphQL queries/mutations as constants, Go types for
 **Auth:** GetCurrentPermissions (RBAC introspection)
 
 **Dashboard:** GetCount (aggregated computer/alert/insight counts), GetComputerCount, ListRiskiestComputers (limit, createdInterval). `GetCount` must pass `{or: []}` match-all filters per `CountQueryInput` field — `{}` or `null` make the server return null counts.
+
+### Unified Logging Filter Sets
+
+Filter sets group Unified Logging filters and scope them to Plans. `UnifiedLoggingFilter.enabled` no longer controls whether a filter ships to endpoints — filters reach endpoints via set membership plus Plan assignment. Writes to `enabled` are persisted but ignored during config generation.
+
+Both resources use the `/app` endpoint. The limited `/graphql` schema omits `UnifiedLoggingFilter.sets`, `getUnifiedLoggingFilterSet`, and `deleteUnifiedLoggingFilterSet`.
+
+`UnifiedLoggingFilter` operations therefore moved from `/graphql` to `/app`. The generator emits one fragment per resource, so once `sets` joined `UnifiedLoggingFilterFields` every operation referencing that fragment needed `/app`. `DeleteUnifiedLoggingFilter` selects only `uuid` and would still work on `/graphql`; it moved so the resource does not straddle two endpoints.
+
+Server-side behaviour worth knowing:
+
+- `PlanInput.UnifiedLoggingFilterSets` is nil-sensitive — `nil` omits the field and leaves existing assignments unchanged; an empty non-nil slice sends `[]` and clears them.
+- Deleting a set that is assigned to a Plan is rejected (`InputValidationError`). Detach it from every Plan first.
+- Deleting a filter that belongs to a set succeeds and silently drops it from the set.
+- `UnifiedLoggingFilterSetInput.Filters` is not validated against existing filters — an unknown UUID is accepted and the set is created with no members.
 
 ## RBAC Variables
 
