@@ -29,7 +29,7 @@ If applicable, include error messages or logs. Please ensure you strip sensitive
 
 **Environment (please complete the following information):**
  - OS: [e.g. macOS 15, Ubuntu 24.04]
- - Go version: [e.g. 1.26.1]
+ - Go version: [e.g. 1.27.1]
  - SDK version: [e.g. v0.1.0]
 
 **Additional context**

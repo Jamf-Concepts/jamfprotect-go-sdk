@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -244,11 +245,11 @@ func wrapResultPath(path, gqlName, body string) string {
 	parts := strings.Split(path, ".")
 	// Walk from innermost outward, wrapping each level.
 	cur := body
-	for i := len(parts) - 1; i >= 0; i-- {
+	for i, part := range slices.Backward(parts) {
 		indent := strings.Repeat("\t", i+1)
 		closeIndent := strings.Repeat("\t", i+1)
 		_ = closeIndent
-		cur = fmt.Sprintf("%s {\n%s\t%s\n%s}", parts[i], indent, cur, indent)
+		cur = fmt.Sprintf("%s {\n%s\t%s\n%s}", part, indent, cur, indent)
 	}
 	return cur
 }
@@ -302,11 +303,11 @@ func resultPathSuffix(resultPath, gqlName string) string {
 func wrapBodyInMutationSuffix(suffix, body string) string {
 	parts := strings.Split(suffix, ".")
 	cur := body
-	for i := len(parts) - 1; i >= 0; i-- {
+	for i, part := range slices.Backward(parts) {
 		depth := 2 + i
 		inner := strings.Repeat("\t", depth+1)
 		outer := strings.Repeat("\t", depth)
-		cur = fmt.Sprintf("%s {\n%s%s\n%s}", parts[i], inner, cur, outer)
+		cur = fmt.Sprintf("%s {\n%s%s\n%s}", part, inner, cur, outer)
 	}
 	return cur
 }

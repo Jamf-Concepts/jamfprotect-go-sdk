@@ -4,7 +4,7 @@ Thank you for your interest in contributing to the Jamf Protect Go SDK.
 
 ## Prerequisites
 
-- **Go** >= 1.26 (see `go.mod` for the exact version)
+- **Go** >= 1.27 (see `go.mod` for the exact version)
 - **golangci-lint** for linting
 - A Jamf Protect tenant with API credentials (for acceptance tests only)
 
