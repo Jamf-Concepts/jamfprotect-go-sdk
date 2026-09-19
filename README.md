@@ -8,7 +8,7 @@ A Go client library for the [Jamf Protect](https://www.jamf.com/products/jamf-pr
 go get github.com/Jamf-Concepts/jamfprotect-go-sdk
 ```
 
-Requires Go 1.26 or later.
+Requires Go 1.27 or later.
 
 ## Usage
 

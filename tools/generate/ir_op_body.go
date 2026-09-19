@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -266,8 +267,8 @@ func buildSingletonGetBody(methodName, returnType, resultKey, endpoint, constNam
 			indent += "\t"
 		}
 	}
-	for i := len(closers) - 1; i >= 0; i-- {
-		b.WriteString(closers[i] + "\n")
+	for _, closer := range slices.Backward(closers) {
+		b.WriteString(closer + "\n")
 	}
 	b.WriteString("\t}\n")
 	fmt.Fprintf(&b, "\tif err := c.transport.DoGraphQL(ctx, %q, %s, %s, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s: %%w\", err)\n\t}\n", endpoint, constName, varsArg, zeroExpr, methodName)
@@ -395,8 +396,8 @@ func buildMutationListBody(op OperationConfig, returnType, resultKey, endpoint, 
 			indent += "\t"
 		}
 	}
-	for i := len(closers) - 1; i >= 0; i-- {
-		b.WriteString(closers[i] + "\n")
+	for _, closer := range slices.Backward(closers) {
+		b.WriteString(closer + "\n")
 	}
 	b.WriteString("\t}\n")
 	fmt.Fprintf(&b, "\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t}\n", endpoint, constName, op.Name)
@@ -445,8 +446,8 @@ func buildSingletonUpdateBody(op OperationConfig, returnType, resultKey, endpoin
 			indent += "\t"
 		}
 	}
-	for i := len(closers) - 1; i >= 0; i-- {
-		b.WriteString(closers[i] + "\n")
+	for _, closer := range slices.Backward(closers) {
+		b.WriteString(closer + "\n")
 	}
 	b.WriteString("\t}\n")
 	fmt.Fprintf(&b, "\tif err := c.transport.DoGraphQL(ctx, %q, %s, vars, &result); err != nil {\n\t\treturn %s, fmt.Errorf(\"%s: %%w\", err)\n\t}\n", endpoint, constName, zeroVal(returnType), op.Name)
