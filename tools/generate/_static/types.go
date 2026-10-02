@@ -11,7 +11,10 @@ import (
 	"time"
 )
 
-// Logger is an interface for logging HTTP requests and responses.
+// Logger is an interface for logging HTTP requests and responses. Bodies are
+// copies with the Authorization header, client secrets, API client passwords,
+// data-forwarding keys, enrolment material, URLs and webhook header values
+// replaced by "[REDACTED]". Other tenant data is passed through unchanged.
 type Logger interface {
 	LogRequest(ctx context.Context, method, url string, headers http.Header, body []byte)
 	LogResponse(ctx context.Context, statusCode int, headers http.Header, body []byte)

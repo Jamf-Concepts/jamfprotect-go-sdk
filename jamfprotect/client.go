@@ -124,7 +124,8 @@ func WithHTTPClient(httpClient *http.Client) Option {
 	}
 }
 
-// WithLogger sets a logger for HTTP request/response logging.
+// WithLogger sets a logger for HTTP request/response logging. Known secret
+// values are redacted before they reach the logger; see Logger.
 func WithLogger(logger Logger) Option {
 	return func(cfg *clientConfig) {
 		cfg.logger = logger
