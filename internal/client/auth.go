@@ -68,7 +68,7 @@ func (c *Client) authenticate(ctx context.Context) (*Token, error) {
 		}
 
 		if c.tokenCache != nil {
-			if accessToken, expiresAt, ok := c.tokenCache.Load(c.cacheKey); ok && accessToken != "" && expiresAt.After(time.Now()) {
+			if accessToken, expiresAt, ok := c.tokenCache.Load(c.cacheKey); ok && accessToken != "" && !c.isRejected(accessToken) && expiresAt.After(time.Now()) {
 				token := &Token{AccessToken: accessToken, Expiry: expiresAt}
 				c.mu.Lock()
 				c.token = token
@@ -109,6 +109,29 @@ func (c *Client) currentToken() *Token {
 		return c.token
 	}
 	return nil
+}
+
+// rejectToken discards accessToken after the API refused it, so the next
+// authenticate call fetches a fresh token instead of reusing it from memory or
+// from the token cache. Thread-safe.
+func (c *Client) rejectToken(accessToken string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.token != nil && c.token.AccessToken == accessToken {
+		c.token = nil
+	}
+	if c.rejected == nil {
+		c.rejected = make(map[string]struct{})
+	}
+	c.rejected[accessToken] = struct{}{}
+}
+
+// isRejected reports whether accessToken was refused by the API. Thread-safe.
+func (c *Client) isRejected(accessToken string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, ok := c.rejected[accessToken]
+	return ok
 }
 
 // fetchToken performs the actual HTTP request to obtain a new access token using the client credentials flow.
