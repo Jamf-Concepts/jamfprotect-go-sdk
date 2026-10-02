@@ -44,6 +44,7 @@ type Client struct {
 	rejected    map[string]struct{}
 	throttle    *throttle
 	maxBody     int64
+	maxPages    int
 }
 
 // NewClient creates a new Jamf Protect GraphQL client.
@@ -72,6 +73,7 @@ func NewClientWithUserAgent(baseURL, clientID, clientSecret, userAgent string, o
 		},
 		throttle: &throttle{interval: defaultMinRequestInterval},
 		maxBody:  defaultMaxResponseBytes,
+		maxPages: defaultMaxPages,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -235,6 +237,17 @@ func WithMinRequestInterval(d time.Duration) Option {
 			d = 0
 		}
 		c.throttle.interval = d
+	}
+}
+
+// WithMaxPages sets how many pages a single paginated call may follow before
+// failing with ErrPaginationLimit. The default is 10,000; a non-positive value
+// keeps the default.
+func WithMaxPages(n int) Option {
+	return func(c *Client) {
+		if n > 0 {
+			c.maxPages = n
+		}
 	}
 }
 

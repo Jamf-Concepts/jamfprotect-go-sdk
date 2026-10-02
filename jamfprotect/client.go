@@ -43,6 +43,9 @@ func NewClient(baseURL, clientID, clientSecret string, opts ...Option) *Client {
 	if cfg.minRequestInterval != nil {
 		transportOpts = append(transportOpts, client.WithMinRequestInterval(*cfg.minRequestInterval))
 	}
+	if cfg.maxPages > 0 {
+		transportOpts = append(transportOpts, client.WithMaxPages(cfg.maxPages))
+	}
 
 	transport := client.NewClientWithUserAgent(baseURL, clientID, clientSecret, cfg.userAgent, transportOpts...)
 	if cfg.logger != nil {
@@ -99,6 +102,7 @@ type clientConfig struct {
 	tokenCache         TokenCache
 	cacheDir           string
 	minRequestInterval *time.Duration
+	maxPages           int
 }
 
 // Option configures a Client.
@@ -150,5 +154,15 @@ func WithFileTokenCache(dir string) Option {
 func WithMinRequestInterval(d time.Duration) Option {
 	return func(cfg *clientConfig) {
 		cfg.minRequestInterval = &d
+	}
+}
+
+// WithMaxPages sets how many pages a single List call may follow before it
+// fails with ErrPaginationLimit. The default is 10,000 pages, which is one
+// million items at the API's default page size; a non-positive value keeps
+// the default.
+func WithMaxPages(n int) Option {
+	return func(cfg *clientConfig) {
+		cfg.maxPages = n
 	}
 }

@@ -6,10 +6,12 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -242,5 +244,110 @@ func TestListAll_BaseVarsNotMutated(t *testing.T) {
 	raw, _ := json.Marshal(baseVars)
 	if string(raw) != `{"pageSize":100}` {
 		t.Errorf("baseVars mutated: %s", raw)
+	}
+}
+
+func TestListAll_NonTerminatingCursors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		maxPages  int
+		cursor    func(call int) string
+		wantCalls int
+	}{
+		{name: "same cursor", maxPages: defaultMaxPages, cursor: func(int) string { return "same" }, wantCalls: 2},
+		{name: "alternating cursors", maxPages: defaultMaxPages, cursor: func(call int) string { return fmt.Sprintf("c%d", call%2) }, wantCalls: 3},
+		{name: "ever-distinct cursors", maxPages: 5, cursor: func(call int) string { return fmt.Sprintf("c%d", call) }, wantCalls: 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var mu sync.Mutex
+			calls := 0
+			c, done := newTestPaginationClient(t, func(w http.ResponseWriter, _ *http.Request) {
+				mu.Lock()
+				next := tt.cursor(calls)
+				calls++
+				mu.Unlock()
+				testEncodeJSON(t, w, map[string]any{
+					"data": map[string]any{
+						"listThings": map[string]any{
+							"items":    []map[string]any{{"id": "x"}},
+							"pageInfo": map[string]any{"next": next},
+						},
+					},
+				})
+			})
+			defer done()
+			c.maxPages = tt.maxPages
+			c.throttle.interval = 0
+
+			items, err := ListAll[testItem](context.Background(), c, "/app", "query { listThings }", map[string]any{}, "listThings")
+			if !errors.Is(err, ErrPaginationLimit) {
+				t.Fatalf("expected ErrPaginationLimit, got items=%d err=%v", len(items), err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if calls != tt.wantCalls {
+				t.Errorf("expected %d requests, got %d", tt.wantCalls, calls)
+			}
+		})
+	}
+}
+
+func TestListAll_PageLimitAllowsExactlyMaxPages(t *testing.T) {
+	t.Parallel()
+
+	var mu sync.Mutex
+	calls := 0
+	c, done := newTestPaginationClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		calls++
+		var next any = fmt.Sprintf("c%d", calls)
+		if calls == 3 {
+			next = nil
+		}
+		mu.Unlock()
+		testEncodeJSON(t, w, map[string]any{
+			"data": map[string]any{
+				"listThings": map[string]any{
+					"items":    []map[string]any{{"id": "x"}},
+					"pageInfo": map[string]any{"next": next},
+				},
+			},
+		})
+	})
+	defer done()
+	c.maxPages = 3
+	c.throttle.interval = 0
+
+	items, err := ListAll[testItem](context.Background(), c, "/app", "query { listThings }", map[string]any{}, "listThings")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(items) != 3 {
+		t.Errorf("expected 3 items, got %d", len(items))
+	}
+}
+
+func TestWithMaxPages(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		n    int
+		want int
+	}{
+		{n: 50000, want: 50000},
+		{n: 0, want: defaultMaxPages},
+		{n: -1, want: defaultMaxPages},
+	}
+	for _, tt := range tests {
+		c := NewClientWithUserAgent("https://example.invalid", "cid", "csecret", "test", WithMaxPages(tt.n))
+		if c.maxPages != tt.want {
+			t.Errorf("WithMaxPages(%d): expected %d, got %d", tt.n, tt.want, c.maxPages)
+		}
 	}
 }

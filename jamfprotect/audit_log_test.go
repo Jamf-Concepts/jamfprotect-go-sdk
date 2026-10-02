@@ -5,6 +5,8 @@ package jamfprotect
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 )
 
@@ -40,33 +42,49 @@ func TestListAuditLogsByDate_Default(t *testing.T) {
 	}
 }
 
-func TestListAuditLogsByDate_StopsOnRepeatedCursor(t *testing.T) {
+func TestListAuditLogsByDate_RepeatedCursor(t *testing.T) {
 	t.Parallel()
 
-	callCount := 0
-	_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
-		t.Helper()
-		callCount++
-		return map[string]any{
-			"listAuditLogsByDate": map[string]any{
-				"items": []map[string]any{
-					{"resourceId": "1", "date": "2026-04-11T12:00:00Z", "args": "{}", "ips": "", "op": "a", "user": "u"},
-				},
-				"pageInfo": map[string]any{"next": "same-cursor-forever"},
-			},
-		}
-	})
+	tests := []struct {
+		name    string
+		cursors []string
+	}{
+		{name: "same cursor", cursors: []string{"c1", "c1"}},
+		{name: "alternating cursors", cursors: []string{"c1", "c2", "c1"}},
+	}
 
-	ctx := context.Background()
-	logs, err := client.ListAuditLogsByDate(ctx, nil)
-	if err != nil {
-		t.Fatalf("ListAuditLogsByDate: %v", err)
-	}
-	if callCount > 2 {
-		t.Errorf("expected pagination to stop on repeated cursor, got %d calls", callCount)
-	}
-	if len(logs) == 0 {
-		t.Fatal("expected at least some logs")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var mu sync.Mutex
+			callCount := 0
+			_, client := testServer(t, func(t *testing.T, req graphqlRequest) any {
+				t.Helper()
+				mu.Lock()
+				defer mu.Unlock()
+				next := tt.cursors[min(callCount, len(tt.cursors)-1)]
+				callCount++
+				return map[string]any{
+					"listAuditLogsByDate": map[string]any{
+						"items": []map[string]any{
+							{"resourceId": "1", "date": "2026-04-11T12:00:00Z", "args": "{}", "ips": "", "op": "a", "user": "u"},
+						},
+						"pageInfo": map[string]any{"next": next},
+					},
+				}
+			})
+
+			logs, err := client.ListAuditLogsByDate(context.Background(), nil)
+			if !errors.Is(err, ErrPaginationLimit) {
+				t.Fatalf("expected ErrPaginationLimit, got logs=%d err=%v", len(logs), err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if callCount != len(tt.cursors) {
+				t.Errorf("expected %d calls, got %d", len(tt.cursors), callCount)
+			}
+		})
 	}
 }
 

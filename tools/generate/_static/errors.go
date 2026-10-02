@@ -16,4 +16,5 @@ var (
 	ErrNotFound           = client.ErrNotFound
 	ErrUnexpectedResponse = client.ErrUnexpectedResponse
 	ErrResponseTooLarge   = client.ErrResponseTooLarge
+	ErrPaginationLimit    = client.ErrPaginationLimit
 )
