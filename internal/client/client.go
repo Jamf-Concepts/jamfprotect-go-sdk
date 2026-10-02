@@ -37,6 +37,7 @@ type Client struct {
 	tokenGroup  singleflight.Group
 	tokenCache  TokenCache
 	cacheKey    string
+	rejected    map[string]struct{}
 	throttle    *throttle
 }
 
@@ -105,24 +106,24 @@ func (c *Client) DoGraphQL(ctx context.Context, path, query string, variables ma
 		return fmt.Errorf("encoding graphql request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(payload))
+	resp, respBody, err := c.postGraphQL(ctx, c.baseURL+path, payload, token.AccessToken)
 	if err != nil {
-		return fmt.Errorf("creating graphql request: %w", err)
+		return err
 	}
-	req.Header.Set("Authorization", token.AccessToken)
-	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("Content-Type", "application/json")
-
-	doer := c.httpDoer()
-	resp, err := doer.Do(req)
-	if err != nil {
-		return fmt.Errorf("executing graphql request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading graphql response: %w", err)
+	if resp.StatusCode == http.StatusUnauthorized {
+		c.rejectToken(token.AccessToken)
+		token, err = c.authenticate(ctx)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrAuthentication, err)
+		}
+		resp, respBody, err = c.postGraphQL(ctx, c.baseURL+path, payload, token.AccessToken)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode == http.StatusUnauthorized {
+			c.rejectToken(token.AccessToken)
+			return fmt.Errorf("%w: graphql request returned %d: %s", ErrAuthentication, resp.StatusCode, string(respBody))
+		}
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("graphql request returned %d: %s", resp.StatusCode, string(respBody))
@@ -149,6 +150,30 @@ func (c *Client) DoGraphQL(ctx context.Context, path, query string, variables ma
 		return fmt.Errorf("decoding graphql data: %w", err)
 	}
 	return nil
+}
+
+// postGraphQL sends one GraphQL payload with the given access token and returns
+// the response together with its fully read body.
+func (c *Client) postGraphQL(ctx context.Context, url string, payload []byte, accessToken string) (*http.Response, []byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating graphql request: %w", err)
+	}
+	req.Header.Set("Authorization", accessToken)
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpDoer().Do(req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("executing graphql request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, fmt.Errorf("reading graphql response: %w", err)
+	}
+	return resp, respBody, nil
 }
 
 // looksLikeJSON reports whether the first non-whitespace byte of b begins a JSON

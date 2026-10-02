@@ -947,3 +947,142 @@ func TestClient_TokenCache_ExpiredCacheEntry(t *testing.T) {
 		t.Errorf("expected 1 token HTTP call for expired cache, got %d", tokenCalls)
 	}
 }
+
+func TestClient_Unauthorized_ReauthenticatesOnce(t *testing.T) {
+	t.Parallel()
+
+	var mu sync.Mutex
+	var tokenCalls, appCalls int
+	var stored []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		tokenCalls++
+		mu.Unlock()
+		testEncodeJSON(t, w, map[string]any{"access_token": "fresh", "expires_in": 3600})
+	})
+	mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		appCalls++
+		mu.Unlock()
+		if r.Header.Get("Authorization") != "fresh" {
+			w.WriteHeader(http.StatusUnauthorized)
+			testWrite(t, w, []byte(`{"errors":[{"errorType":"UnauthorizedException","message":"You are not authorized to make this call."}]}`))
+			return
+		}
+		testEncodeJSON(t, w, map[string]any{"data": map[string]any{"x": "ok"}})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cache := &mockTokenCache{
+		loadFn: func(_ string) (string, time.Time, bool) {
+			return "stale", time.Now().Add(time.Hour), true
+		},
+		storeFn: func(_ string, token string, _ time.Time) error {
+			mu.Lock()
+			stored = append(stored, token)
+			mu.Unlock()
+			return nil
+		},
+	}
+	client := NewClientWithUserAgent(srv.URL, "cid", "csecret", "test",
+		WithTokenCache(cache, "test-key"), WithMinRequestInterval(0))
+
+	var result struct {
+		X string `json:"x"`
+	}
+	if err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, &result); err != nil {
+		t.Fatalf("expected success after re-authentication, got: %v", err)
+	}
+	if result.X != "ok" {
+		t.Errorf("expected x=ok, got %q", result.X)
+	}
+	if err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, nil); err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if tokenCalls != 1 {
+		t.Errorf("expected 1 token fetch, got %d", tokenCalls)
+	}
+	if appCalls != 3 {
+		t.Errorf("expected 3 GraphQL calls (401, retry, second call), got %d", appCalls)
+	}
+	if len(stored) != 1 || stored[0] != "fresh" {
+		t.Errorf("expected fresh token stored once, got %v", stored)
+	}
+}
+
+func TestClient_Unauthorized_RetriesOnlyOnce(t *testing.T) {
+	t.Parallel()
+
+	var mu sync.Mutex
+	var tokenCalls, appCalls int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		tokenCalls++
+		mu.Unlock()
+		testEncodeJSON(t, w, map[string]any{"access_token": fmt.Sprintf("tok-%d", time.Now().UnixNano()), "expires_in": 3600})
+	})
+	mux.HandleFunc("/app", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		appCalls++
+		mu.Unlock()
+		w.WriteHeader(http.StatusUnauthorized)
+		testWrite(t, w, []byte(`{"errors":[{"message":"You are not authorized to make this call."}]}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := NewClientWithUserAgent(srv.URL, "cid", "csecret", "test", WithMinRequestInterval(0))
+	err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, nil)
+	if !errors.Is(err, ErrAuthentication) || !strings.Contains(err.Error(), "401") {
+		t.Fatalf("expected ErrAuthentication with 401, got: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if appCalls != 2 {
+		t.Errorf("expected 2 GraphQL calls, got %d", appCalls)
+	}
+	if tokenCalls != 2 {
+		t.Errorf("expected 2 token fetches, got %d", tokenCalls)
+	}
+}
+
+func TestClient_Forbidden_DoesNotReauthenticate(t *testing.T) {
+	t.Parallel()
+
+	var mu sync.Mutex
+	var tokenCalls, appCalls int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		tokenCalls++
+		mu.Unlock()
+		testEncodeJSON(t, w, map[string]any{"access_token": "tok", "expires_in": 3600})
+	})
+	mux.HandleFunc("/app", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		appCalls++
+		mu.Unlock()
+		w.WriteHeader(http.StatusForbidden)
+		testWrite(t, w, []byte(`{"message":"Forbidden"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := NewClientWithUserAgent(srv.URL, "cid", "csecret", "test", WithMinRequestInterval(0))
+	if err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, nil); err == nil {
+		t.Fatal("expected error for 403")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if appCalls != 1 || tokenCalls != 1 {
+		t.Errorf("expected 1 GraphQL call and 1 token fetch, got %d and %d", appCalls, tokenCalls)
+	}
+}
