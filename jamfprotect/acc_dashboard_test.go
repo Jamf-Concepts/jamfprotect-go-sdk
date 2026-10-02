@@ -40,6 +40,5 @@ func TestAcc_ListRiskiestComputers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListRiskiestComputers: %v", err)
 	}
-	b, _ := json.MarshalIndent(computers, "", "  ")
-	t.Logf("ListRiskiestComputers (top 5, 30d):\n%s", b)
+	t.Logf("ListRiskiestComputers (top 5, 30d): %d computers", len(computers))
 }
