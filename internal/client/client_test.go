@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1084,5 +1085,153 @@ func TestClient_Forbidden_DoesNotReauthenticate(t *testing.T) {
 	defer mu.Unlock()
 	if appCalls != 1 || tokenCalls != 1 {
 		t.Errorf("expected 1 GraphQL call and 1 token fetch, got %d and %d", appCalls, tokenCalls)
+	}
+}
+
+func TestClient_ResponseTooLarge(t *testing.T) {
+	t.Parallel()
+
+	big := `{"data":{"x":"` + strings.Repeat("a", 2048) + `"}}`
+	tests := []struct {
+		name      string
+		tokenBody string
+		appBody   string
+		logger    Logger
+	}{
+		{name: "graphql body", appBody: big},
+		{name: "graphql body with logger", appBody: big, logger: &testLogger{}},
+		{name: "token body", tokenBody: `{"access_token":"` + strings.Repeat("t", 2048) + `","expires_in":3600}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+				if tt.tokenBody != "" {
+					testWrite(t, w, []byte(tt.tokenBody))
+					return
+				}
+				testEncodeJSON(t, w, map[string]any{"access_token": "tok", "expires_in": 3600})
+			})
+			mux.HandleFunc("/app", func(w http.ResponseWriter, _ *http.Request) {
+				body := tt.appBody
+				if body == "" {
+					body = `{"data":{}}`
+				}
+				testWrite(t, w, []byte(body))
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+
+			client := NewClientWithUserAgent(srv.URL, "cid", "csecret", "test", WithMinRequestInterval(0))
+			client.maxBody = 1024
+			if tt.logger != nil {
+				client.SetLogger(tt.logger)
+			}
+
+			err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, nil)
+			if !errors.Is(err, ErrResponseTooLarge) {
+				t.Fatalf("expected ErrResponseTooLarge, got: %v", err)
+			}
+			if l, ok := tt.logger.(*testLogger); ok {
+				if l.responseCount() == 0 {
+					t.Fatal("expected the oversize response to be logged")
+				}
+				for i := range l.responseCount() {
+					if n := len(l.responseAt(i).body); n > 1025 {
+						t.Errorf("logger buffered %d bytes, expected at most 1025", n)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestClient_ResponseSizeBoundary(t *testing.T) {
+	t.Parallel()
+
+	const limit = 1024
+	body := func(size int) string {
+		prefix, suffix := `{"data":{"x":"`, `"}}`
+		return prefix + strings.Repeat("a", size-len(prefix)-len(suffix)) + suffix
+	}
+	tests := []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{name: "at limit", size: limit},
+		{name: "one byte over", size: limit + 1, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		for _, withLogger := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s logger=%t", tt.name, withLogger), func(t *testing.T) {
+				t.Parallel()
+
+				payload := body(tt.size)
+				mux := http.NewServeMux()
+				mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+					testEncodeJSON(t, w, map[string]any{"access_token": "tok", "expires_in": 3600})
+				})
+				mux.HandleFunc("/app", func(w http.ResponseWriter, _ *http.Request) {
+					testWrite(t, w, []byte(payload))
+				})
+				srv := httptest.NewServer(mux)
+				defer srv.Close()
+
+				client := NewClientWithUserAgent(srv.URL, "cid", "csecret", "test", WithMinRequestInterval(0))
+				client.maxBody = limit
+				logger := &testLogger{}
+				if withLogger {
+					client.SetLogger(logger)
+				}
+
+				var result struct {
+					X string `json:"x"`
+				}
+				err := client.DoGraphQL(context.Background(), "/app", "query { x }", nil, &result)
+				if tt.wantErr {
+					if !errors.Is(err, ErrResponseTooLarge) {
+						t.Fatalf("expected ErrResponseTooLarge, got: %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if want := len(payload) - len(`{"data":{"x":""}}`); len(result.X) != want {
+					t.Errorf("expected %d bytes of payload, got %d", want, len(result.X))
+				}
+				if withLogger && logger.responseCount() == 0 {
+					t.Error("expected the response to be logged")
+				}
+			})
+		}
+	}
+}
+
+type failingDoer struct{}
+
+func (failingDoer) Do(*http.Request) (*http.Response, error) {
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(io.MultiReader(strings.NewReader(`{"data":`), errReader{}))}, nil
+}
+
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
+
+func TestLoggingDoer_ReturnsBodyReadError(t *testing.T) {
+	t.Parallel()
+
+	d := &loggingDoer{base: failingDoer{}, logger: &testLogger{}, maxBody: defaultMaxResponseBytes}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://example.invalid/app", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Do(req); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("expected the body read error, got: %v", err)
 	}
 }

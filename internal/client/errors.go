@@ -14,4 +14,7 @@ var (
 	// JSON response was expected — typically an HTML error page from an edge proxy
 	// or WAF — and is distinct from a genuine JSON syntax error from the API.
 	ErrUnexpectedResponse = errors.New("jamfprotect: unexpected non-JSON response")
+	// ErrResponseTooLarge indicates a response body exceeded the client's size
+	// limit and was not read in full.
+	ErrResponseTooLarge = errors.New("jamfprotect: response body too large")
 )

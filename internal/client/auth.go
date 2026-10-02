@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 )
@@ -162,7 +161,7 @@ func (c *Client) fetchToken(ctx context.Context) (*Token, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := c.readBody(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading token response: %w", err)
 	}
