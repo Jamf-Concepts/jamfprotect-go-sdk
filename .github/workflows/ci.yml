@@ -35,7 +35,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: golangci/golangci-lint-action@v9
+      - run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run ./...
 
   generator:
     name: Generator Module
@@ -50,9 +50,8 @@ jobs:
         working-directory: tools/generate
       - run: go vet ./...
         working-directory: tools/generate
-      - uses: golangci/golangci-lint-action@v9
-        with:
-          working-directory: tools/generate
+      - run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run ./...
+        working-directory: tools/generate
 
   mod-tidy:
     name: Go Mod Tidy
