@@ -26,7 +26,7 @@ func TestAcc_Insights_List(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListInsightComputers(%s): %v", insights[0].UUID, err)
 	}
-	t.Logf("ListInsightComputers(%s / %s): %d computers", insights[0].UUID, insights[0].Label, len(computers))
+	t.Logf("ListInsightComputers: %d computers", len(computers))
 
 	// Verify fleet compliance score.
 	score, err := client.GetFleetComplianceScore(ctx, "")

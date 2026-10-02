@@ -20,7 +20,7 @@ func TestAcc_CurrentPermissions(t *testing.T) {
 	if len(perms.Read) == 0 {
 		t.Fatal("GetCurrentPermissions: expected at least one read permission")
 	}
-	t.Logf("Permissions: read=%v write=%v", perms.Read, perms.Write)
+	t.Logf("Permissions: %d read, %d write", len(perms.Read), len(perms.Write))
 }
 
 func TestAcc_Downloads_Get(t *testing.T) {
@@ -74,9 +74,6 @@ func TestAcc_BetaAcceptanceStatus_Get(t *testing.T) {
 		t.Fatalf("GetBetaAcceptanceStatus: %v", err)
 	}
 	t.Logf("BetaAcceptanceStatus: %d record(s)", len(statuses))
-	for _, s := range statuses {
-		t.Logf("  betaName=%s acceptedUser=%s acceptedTimestamp=%s", s.BetaName, s.AcceptedUser, s.AcceptedTimestamp)
-	}
 }
 
 func TestAcc_FileTokenCache(t *testing.T) {
