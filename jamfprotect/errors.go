@@ -15,4 +15,5 @@ var (
 	ErrGraphQL            = client.ErrGraphQL
 	ErrNotFound           = client.ErrNotFound
 	ErrUnexpectedResponse = client.ErrUnexpectedResponse
+	ErrResponseTooLarge   = client.ErrResponseTooLarge
 )

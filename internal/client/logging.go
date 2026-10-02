@@ -23,16 +23,21 @@ type httpDoer interface {
 
 // loggingDoer is an httpDoer that logs requests and responses using a Logger.
 type loggingDoer struct {
-	base   httpDoer
-	logger Logger
+	base    httpDoer
+	logger  Logger
+	maxBody int64
 }
 
 // Do implements the httpDoer interface, logging the request and response.
 func (d *loggingDoer) Do(req *http.Request) (*http.Response, error) {
 	var reqBody []byte
 	if req.Body != nil {
-		reqBody, _ = io.ReadAll(req.Body)
+		var err error
+		reqBody, err = io.ReadAll(req.Body)
 		_ = req.Body.Close()
+		if err != nil {
+			return nil, err
+		}
 		req.Body = io.NopCloser(bytes.NewReader(reqBody))
 	}
 	if d.logger != nil {
@@ -44,8 +49,11 @@ func (d *loggingDoer) Do(req *http.Request) (*http.Response, error) {
 		return resp, err
 	}
 	if resp != nil && resp.Body != nil {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(io.LimitReader(resp.Body, d.maxBody+1))
 		_ = resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
 		if d.logger != nil {
 			d.logger.LogResponse(req.Context(), resp.StatusCode, resp.Header, respBody)

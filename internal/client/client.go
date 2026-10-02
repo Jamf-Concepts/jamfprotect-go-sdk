@@ -25,6 +25,10 @@ type oauthConfig struct {
 	TokenURL     string
 }
 
+// defaultMaxResponseBytes caps how much of a single response body the client
+// reads. The largest Jamf Protect pages observed are a few hundred kilobytes.
+const defaultMaxResponseBytes int64 = 32 << 20
+
 // Client communicates with the Jamf Protect GraphQL API.
 type Client struct {
 	baseURL     string
@@ -39,6 +43,7 @@ type Client struct {
 	cacheKey    string
 	rejected    map[string]struct{}
 	throttle    *throttle
+	maxBody     int64
 }
 
 // NewClient creates a new Jamf Protect GraphQL client.
@@ -66,6 +71,7 @@ func NewClientWithUserAgent(baseURL, clientID, clientSecret, userAgent string, o
 			TokenURL:     strings.TrimRight(baseURL, "/") + "/token",
 		},
 		throttle: &throttle{interval: defaultMinRequestInterval},
+		maxBody:  defaultMaxResponseBytes,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -169,11 +175,24 @@ func (c *Client) postGraphQL(ctx context.Context, url string, payload []byte, ac
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := c.readBody(resp.Body)
 	if err != nil {
 		return nil, nil, fmt.Errorf("reading graphql response: %w", err)
 	}
 	return resp, respBody, nil
+}
+
+// readBody reads r in full, failing with ErrResponseTooLarge instead of
+// buffering more than the client's response size limit.
+func (c *Client) readBody(r io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, c.maxBody+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > c.maxBody {
+		return nil, fmt.Errorf("%w: exceeds %d bytes", ErrResponseTooLarge, c.maxBody)
+	}
+	return b, nil
 }
 
 // looksLikeJSON reports whether the first non-whitespace byte of b begins a JSON
@@ -224,7 +243,7 @@ func WithMinRequestInterval(d time.Duration) Option {
 func (c *Client) httpDoer() httpDoer {
 	var doer httpDoer = c.httpClient
 	if c.logger != nil {
-		doer = &loggingDoer{base: doer, logger: c.logger}
+		doer = &loggingDoer{base: doer, logger: c.logger, maxBody: c.maxBody}
 	}
 	if c.throttle != nil && c.throttle.interval > 0 {
 		doer = &throttlingDoer{base: doer, throttle: c.throttle}
