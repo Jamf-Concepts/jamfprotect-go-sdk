@@ -64,6 +64,14 @@ client := jamfprotect.NewClient(baseURL, clientID, clientSecret,
 client := jamfprotect.NewClient(baseURL, clientID, clientSecret,
 	jamfprotect.WithLogger(myLogger),
 )
+
+// Persist tokens across process restarts. The directory must be private to the
+// running user; a directory owned by someone else, or writable by group or
+// others, is ignored.
+cacheDir, _ := os.UserCacheDir()
+client := jamfprotect.NewClient(baseURL, clientID, clientSecret,
+	jamfprotect.WithFileTokenCache(filepath.Join(cacheDir, "my-app")),
+)
 ```
 
 ## Error Handling
