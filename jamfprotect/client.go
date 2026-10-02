@@ -135,6 +135,10 @@ func WithTokenCache(cache TokenCache) Option {
 }
 
 // WithFileTokenCache enables file-based token caching in the given directory.
+// The directory must be private to the running user, for example a
+// subdirectory of os.UserCacheDir. It is created with mode 0700 if missing; an
+// existing directory that is not owned by the current user, or that group or
+// others can write, is not used and tokens are fetched on every process start.
 func WithFileTokenCache(dir string) Option {
 	return func(cfg *clientConfig) {
 		cfg.cacheDir = dir
