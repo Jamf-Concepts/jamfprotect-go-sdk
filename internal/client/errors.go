@@ -17,4 +17,7 @@ var (
 	// ErrResponseTooLarge indicates a response body exceeded the client's size
 	// limit and was not read in full.
 	ErrResponseTooLarge = errors.New("jamfprotect: response body too large")
+	// ErrPaginationLimit indicates a paginated list was abandoned because the
+	// server repeated a cursor or the page limit was reached.
+	ErrPaginationLimit = errors.New("jamfprotect: pagination limit exceeded")
 )

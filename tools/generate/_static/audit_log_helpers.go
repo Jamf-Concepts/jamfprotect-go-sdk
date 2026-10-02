@@ -49,7 +49,7 @@ func auditLogCondition(dateRange *AuditLogDateRange) map[string]any {
 
 func (c *Client) fetchAllAuditLogs(ctx context.Context, query string, baseVars map[string]any, resultKey string) ([]AuditLog, error) {
 	var allItems []AuditLog
-	var prevCursor string
+	guard := c.transport.NewCursorGuard()
 
 	vars := make(map[string]any, len(baseVars))
 	maps.Copy(vars, baseVars)
@@ -80,10 +80,9 @@ func (c *Client) fetchAllAuditLogs(ctx context.Context, query string, baseVars m
 		if page.PageInfo.Next == nil {
 			break
 		}
-		if *page.PageInfo.Next == prevCursor {
-			break
+		if err := guard.Next(*page.PageInfo.Next); err != nil {
+			return nil, fmt.Errorf("paginating %s: %w", resultKey, err)
 		}
-		prevCursor = *page.PageInfo.Next
 		vars["next"] = *page.PageInfo.Next
 	}
 
