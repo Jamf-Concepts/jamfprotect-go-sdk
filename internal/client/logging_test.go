@@ -221,3 +221,24 @@ func TestClient_Logger_ReceivesCopies(t *testing.T) {
 		t.Errorf("logger mutation reached the response: %q", result.X)
 	}
 }
+
+// TestRedactBody_PreservesNumbers checks that numbers survive redaction unchanged.
+func TestRedactBody_PreservesNumbers(t *testing.T) {
+	t.Parallel()
+
+	body := `{"id":12345678901234567890,"ratio":1.50,"password":"hunter2"}`
+	got := string(redactBody([]byte(body)))
+	want := `{"id":12345678901234567890,"password":"` + redactedValue + `","ratio":1.50}`
+	if got != want {
+		t.Errorf("redactBody() = %s, want %s", got, want)
+	}
+}
+
+// TestRedactBody_TrailingData checks that a body with data after the first value is not treated as JSON.
+func TestRedactBody_TrailingData(t *testing.T) {
+	t.Parallel()
+
+	if _, ok := decodeJSON([]byte(`{"a":1} {"b":2}`)); ok {
+		t.Error("decodeJSON accepted trailing data")
+	}
+}

@@ -6,7 +6,9 @@ package client
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
+	"errors"
 	"io"
 	"net/http"
 )
@@ -162,22 +164,78 @@ func decodeJSON(b []byte) (any, bool) {
 	if !looksLikeJSON(b) {
 		return nil, false
 	}
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
+	dec := jsontext.NewDecoder(bytes.NewReader(b))
+	v, err := decodeValue(dec)
+	if err != nil {
+		return nil, false
+	}
+	if _, err := dec.ReadToken(); !errors.Is(err, io.EOF) {
 		return nil, false
 	}
 	return v, true
 }
 
-// encodeJSON encodes v without HTML escaping so logged bodies stay readable.
+// decodeValue reads one JSON value into maps, slices, strings, bools and nil.
+// Numbers stay as raw jsontext.Value so re-encoding does not alter them.
+func decodeValue(dec *jsontext.Decoder) (any, error) {
+	switch dec.PeekKind() {
+	case '{':
+		if _, err := dec.ReadToken(); err != nil {
+			return nil, err
+		}
+		obj := make(map[string]any)
+		for dec.PeekKind() != '}' {
+			tok, err := dec.ReadToken()
+			if err != nil {
+				return nil, err
+			}
+			key := tok.String()
+			val, err := decodeValue(dec)
+			if err != nil {
+				return nil, err
+			}
+			obj[key] = val
+		}
+		_, err := dec.ReadToken()
+		return obj, err
+	case '[':
+		if _, err := dec.ReadToken(); err != nil {
+			return nil, err
+		}
+		arr := []any{}
+		for dec.PeekKind() != ']' {
+			val, err := decodeValue(dec)
+			if err != nil {
+				return nil, err
+			}
+			arr = append(arr, val)
+		}
+		_, err := dec.ReadToken()
+		return arr, err
+	case '0':
+		val, err := dec.ReadValue()
+		return val.Clone(), err
+	default:
+		tok, err := dec.ReadToken()
+		if err != nil {
+			return nil, err
+		}
+		switch tok.Kind() {
+		case '"':
+			return tok.String(), nil
+		case 't', 'f':
+			return tok.Bool(), nil
+		default:
+			return nil, nil
+		}
+	}
+}
+
+// encodeJSON encodes v with sorted object keys so logged bodies stay readable and stable.
 func encodeJSON(v any) ([]byte, bool) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
+	out, err := json.Marshal(v, json.Deterministic(true))
+	if err != nil {
 		return nil, false
 	}
-	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), true
+	return out, true
 }

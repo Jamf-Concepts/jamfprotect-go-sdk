@@ -101,8 +101,8 @@ type ForwardSentinelInput struct {
 // DataStreamInput is a nested input type.
 type DataStreamInput struct {
 	Enabled        bool    `json:"enabled"`
-	DcrImmutableID *string `json:"dcrImmutableId,omitempty"`
-	StreamName     *string `json:"streamName,omitempty"`
+	DcrImmutableID *string `json:"dcrImmutableId,omitzero"`
+	StreamName     *string `json:"streamName,omitzero"`
 }
 
 // ForwardSentinelV2Input is a nested input type.
@@ -110,7 +110,7 @@ type ForwardSentinelV2Input struct {
 	Enabled           bool            `json:"enabled"`
 	AzureTenantID     string          `json:"azureTenantId"`
 	AzureClientID     string          `json:"azureClientId"`
-	AzureClientSecret *string         `json:"azureClientSecret,omitempty"`
+	AzureClientSecret *string         `json:"azureClientSecret,omitzero"`
 	Endpoint          string          `json:"endpoint"`
 	Alerts            DataStreamInput `json:"alerts"`
 	Ulogs             DataStreamInput `json:"ulogs"`

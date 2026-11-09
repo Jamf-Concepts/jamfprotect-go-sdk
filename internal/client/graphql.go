@@ -4,7 +4,8 @@
 package client
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"strings"
 )
@@ -17,8 +18,8 @@ type graphQLRequest struct {
 
 // graphQLResponse represents a GraphQL response payload, including any errors.
 type graphQLResponse struct {
-	Data   json.RawMessage `json:"data"`
-	Errors []graphQLError  `json:"errors"`
+	Data   jsontext.Value `json:"data"`
+	Errors []graphQLError `json:"errors"`
 }
 
 // graphQLError represents an individual error returned by the GraphQL API, including message, locations, path, and extensions.

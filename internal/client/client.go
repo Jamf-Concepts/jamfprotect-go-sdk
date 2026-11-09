@@ -6,7 +6,7 @@ package client
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -109,7 +109,7 @@ func (c *Client) DoGraphQL(ctx context.Context, path, query string, variables ma
 	payload, err := json.Marshal(graphQLRequest{
 		Query:     query,
 		Variables: variables,
-	})
+	}, json.Deterministic(true))
 	if err != nil {
 		return fmt.Errorf("encoding graphql request: %w", err)
 	}

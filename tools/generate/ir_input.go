@@ -189,7 +189,7 @@ func applyInputTypeRenames(goType string, renames map[string]string) string {
 // buildNestedInputTypes recursively generates Go structs for nested InputObject types
 // referenced by the fields of the given schema input type. The generated structs include
 // json tags (required for direct serialisation into vars maps).
-// nullableNestedFields maps schema type name → field names that should use *T + omitempty json tag.
+// nullableNestedFields maps schema type name → field names that should use *T + omitzero json tag.
 // inputFieldGoRenames maps schema type name → (schema field name → Go field name override).
 func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]bool, scalars map[string]string, renames map[string]string, nullableNestedFields map[string][]string, inputFieldGoRenames map[string]map[string]string) ([]IRStruct, error) {
 	def := schema.Types[typeName]
@@ -237,7 +237,7 @@ func buildNestedInputTypes(schema *ast.Schema, typeName string, seen map[string]
 				if !strings.HasPrefix(nfGoType, "[]") && !strings.HasPrefix(nfGoType, "*") {
 					nfGoType = "*" + nfGoType
 				}
-				jsonTag += ",omitempty"
+				jsonTag += ",omitzero"
 			}
 			goFieldName := toPascalCase(nf.Name)
 			if override, ok := fieldGoRenames[nf.Name]; ok {
@@ -347,7 +347,7 @@ func buildMultiWrappedInputTypes(schema *ast.Schema, op OperationConfig, res Res
 				if !strings.HasPrefix(fGoType, "[]") && !strings.HasPrefix(fGoType, "*") {
 					fGoType = "*" + fGoType
 				}
-				jsonTag += ",omitempty"
+				jsonTag += ",omitzero"
 			}
 			fields = append(fields, IRField{
 				Name:    toPascalCase(f.Name),

@@ -129,22 +129,22 @@ type AppSigningInfoInput struct {
 // ExceptionInput is a nested input type.
 type ExceptionInput struct {
 	Type           string               `json:"type"`
-	Value          *string              `json:"value,omitempty"`
-	AppSigningInfo *AppSigningInfoInput `json:"appSigningInfo,omitempty"`
+	Value          *string              `json:"value,omitzero"`
+	AppSigningInfo *AppSigningInfoInput `json:"appSigningInfo,omitzero"`
 	IgnoreActivity string               `json:"ignoreActivity"`
-	AnalyticUUID   *string              `json:"analyticUuid,omitempty"`
-	AnalyticTypes  []string             `json:"analyticTypes,omitempty"`
+	AnalyticUUID   *string              `json:"analyticUuid,omitzero"`
+	AnalyticTypes  []string             `json:"analyticTypes,omitzero"`
 }
 
 // EsExceptionInput is a nested input type.
 type EsExceptionInput struct {
 	Type              string               `json:"type"`
-	Value             *string              `json:"value,omitempty"`
-	AppSigningInfo    *AppSigningInfoInput `json:"appSigningInfo,omitempty"`
+	Value             *string              `json:"value,omitzero"`
+	AppSigningInfo    *AppSigningInfoInput `json:"appSigningInfo,omitzero"`
 	IgnoreActivity    string               `json:"ignoreActivity"`
 	IgnoreListType    string               `json:"ignoreListType"`
-	IgnoreListSubType *string              `json:"ignoreListSubType,omitempty"`
-	EventType         *string              `json:"eventType,omitempty"`
+	IgnoreListSubType *string              `json:"ignoreListSubType,omitzero"`
+	EventType         *string              `json:"eventType,omitzero"`
 }
 
 // ── Response types ────────────────────────────────────────────────────────────

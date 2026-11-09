@@ -117,13 +117,13 @@ type RemovableStorageControlSetInput struct {
 // EncryptionRuleInput is a nested input type.
 type EncryptionRuleInput struct {
 	MountAction   string  `json:"mountAction"`
-	MessageAction *string `json:"messageAction,omitempty"`
+	MessageAction *string `json:"messageAction,omitzero"`
 }
 
 // VendorRuleInput is a nested input type.
 type VendorRuleInput struct {
 	MountAction   string   `json:"mountAction"`
-	MessageAction *string  `json:"messageAction,omitempty"`
+	MessageAction *string  `json:"messageAction,omitzero"`
 	ApplyTo       string   `json:"applyTo"`
 	Vendors       []string `json:"vendors"`
 }
@@ -131,7 +131,7 @@ type VendorRuleInput struct {
 // SerialRuleInput is a nested input type.
 type SerialRuleInput struct {
 	MountAction   string   `json:"mountAction"`
-	MessageAction *string  `json:"messageAction,omitempty"`
+	MessageAction *string  `json:"messageAction,omitzero"`
 	ApplyTo       string   `json:"applyTo"`
 	Serials       []string `json:"serials"`
 }
@@ -145,7 +145,7 @@ type ProductValueInput struct {
 // ProductRuleInput is a nested input type.
 type ProductRuleInput struct {
 	MountAction   string              `json:"mountAction"`
-	MessageAction *string             `json:"messageAction,omitempty"`
+	MessageAction *string             `json:"messageAction,omitzero"`
 	ApplyTo       string              `json:"applyTo"`
 	Products      []ProductValueInput `json:"products"`
 }
@@ -153,10 +153,10 @@ type ProductRuleInput struct {
 // RemovableStorageControlRuleInput is a nested input type.
 type RemovableStorageControlRuleInput struct {
 	Type           string               `json:"type"`
-	EncryptionRule *EncryptionRuleInput `json:"encryptionRule,omitempty"`
-	VendorRule     *VendorRuleInput     `json:"vendorRule,omitempty"`
-	SerialRule     *SerialRuleInput     `json:"serialRule,omitempty"`
-	ProductRule    *ProductRuleInput    `json:"productRule,omitempty"`
+	EncryptionRule *EncryptionRuleInput `json:"encryptionRule,omitzero"`
+	VendorRule     *VendorRuleInput     `json:"vendorRule,omitzero"`
+	SerialRule     *SerialRuleInput     `json:"serialRule,omitzero"`
+	ProductRule    *ProductRuleInput    `json:"productRule,omitzero"`
 }
 
 // ── Response types ────────────────────────────────────────────────────────────
