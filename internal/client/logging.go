@@ -99,10 +99,17 @@ func redactRequestHeaders(headers http.Header) http.Header {
 
 // redactBody returns a copy of a JSON body with secret values replaced, so it
 // can be logged. Bodies that are not JSON, or that contain no secrets, are
-// copied unchanged.
+// copied unchanged. A body that looks like JSON but does not decode strictly,
+// for example because of duplicate keys or invalid UTF-8, is replaced entirely.
 func redactBody(body []byte) []byte {
 	v, ok := decodeJSON(body)
-	if !ok || !redactValue(v, "") {
+	if !ok {
+		if looksLikeJSON(body) {
+			return []byte(redactedValue)
+		}
+		return bytes.Clone(body)
+	}
+	if !redactValue(v, "") {
 		return bytes.Clone(body)
 	}
 	out, ok := encodeJSON(v)
