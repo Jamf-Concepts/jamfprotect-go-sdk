@@ -528,7 +528,7 @@ func TestBuildAnalyticVariables_RequiredFieldsOnly(t *testing.T) {
 
 	got := buildAnalyticVariables(input)
 
-	required := []string{"name", "inputType", "description", "actions", "analyticActions",
+	required := []string{"name", "inputType", "description", "analyticActions",
 		"tags", "categories", "filter", "context", "level", "severity", "snapshotFiles", "startup"}
 	for _, k := range required {
 		if _, ok := got[k]; !ok {
@@ -536,7 +536,7 @@ func TestBuildAnalyticVariables_RequiredFieldsOnly(t *testing.T) {
 		}
 	}
 
-	for _, k := range []string{"label", "longDescription", "remediation", "matchReason"} {
+	for _, k := range []string{"actions", "label", "longDescription", "remediation", "matchReason"} {
 		if _, ok := got[k]; ok {
 			t.Errorf("expected variable %q to be omitted, got %v", k, got[k])
 		}

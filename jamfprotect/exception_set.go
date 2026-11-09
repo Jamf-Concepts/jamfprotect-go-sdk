@@ -268,10 +268,13 @@ func (c *Client) ListExceptionSets(ctx context.Context) ([]ExceptionSetListItem,
 }
 
 func buildExceptionSetVariables(input ExceptionSetInput) map[string]any {
-	return map[string]any{
-		"name":         input.Name,
-		"description":  input.Description,
-		"exceptions":   input.Exceptions,
-		"esExceptions": input.EsExceptions,
+	vars := map[string]any{
+		"name":        input.Name,
+		"description": input.Description,
+		"exceptions":  input.Exceptions,
 	}
+	if input.EsExceptions != nil {
+		vars["esExceptions"] = input.EsExceptions
+	}
+	return vars
 }

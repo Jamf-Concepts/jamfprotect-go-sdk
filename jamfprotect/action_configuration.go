@@ -362,10 +362,13 @@ func (c *Client) ListActionConfigs(ctx context.Context) ([]ActionConfigListItem,
 }
 
 func buildActionConfigVariables(input ActionConfigInput) map[string]any {
-	return map[string]any{
+	vars := map[string]any{
 		"name":        input.Name,
 		"description": input.Description,
-		"clients":     input.Clients,
 		"alertConfig": input.AlertConfig,
 	}
+	if input.Clients != nil {
+		vars["clients"] = input.Clients
+	}
+	return vars
 }

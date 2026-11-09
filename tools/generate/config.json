@@ -481,6 +481,7 @@
       "typeName": "Group",
       "idField": "id",
       "fields": ["id", "name", "connection", "assignedRoles", "accessGroup", "created", "updated"],
+      "optionalInputFields": ["roleIds"],
       "nestedTypes": [
         {
           "schemaName": "Connection",
@@ -562,7 +563,7 @@
         {"schemaName": "AnalyticContext", "goName": "AnalyticContext"}
       ],
       "nullableInputFields": ["startup", "tenantSeverity"],
-      "optionalInputFields": ["label", "longDescription", "startup", "remediation", "matchReason", "tenantActions", "tenantSeverity"],
+      "optionalInputFields": ["label", "longDescription", "startup", "remediation", "matchReason", "tenantActions", "tenantSeverity", "actions"],
       "explicitNullInputFields": ["tenantActions", "tenantSeverity"],
       "inputTypeRenames": {
         "AnalyticActionsInput": "AnalyticActionInput"
@@ -660,7 +661,7 @@
       "rbacMap": "rbacUser",
       "nullableResponseFields": ["sub", "lastLogin"],
       "nullableInputFields": ["connectionId"],
-      "optionalInputFields": ["email"],
+      "optionalInputFields": ["email", "roleIds", "groupIds"],
       "operations": [
         {
           "name": "CreateUser",
@@ -868,6 +869,7 @@
       "typeName": "ExceptionSet",
       "idField": "uuid",
       "fields": ["uuid", "name", "description", "exceptions", "esExceptions", "created", "updated", "managed"],
+      "optionalInputFields": ["esExceptions"],
       "nestedTypes": [
         {
           "schemaName": "Exception",
@@ -1314,6 +1316,7 @@
       "typeName": "ActionConfig",
       "gqlTypeName": "ActionConfigs",
       "fields": ["id", "name", "description", "hash", "created", "updated", "alertConfig", "clients", "plans"],
+      "optionalInputFields": ["clients"],
       "nestedTypes": [
         {"schemaName": "ActionConfigsAlertConfig", "goName": "AlertConfig", "nullableFields": ["data"]},
         {"schemaName": "AlertDataConfigs", "goName": "AlertData", "nullableFields": ["binary","clickEvent","downloadEvent","file","fsEvent","group","procEvent","process","screenshotEvent","usbEvent","user","gkEvent","keylogRegisterEvent","mrtEvent"]},

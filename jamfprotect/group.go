@@ -182,10 +182,13 @@ func (c *Client) ListGroups(ctx context.Context) ([]Group, error) {
 }
 
 func buildGroupVariables(input GroupInput) map[string]any {
-	return map[string]any{
+	vars := map[string]any{
 		"name":         input.Name,
 		"connectionId": input.ConnectionID,
 		"accessGroup":  input.AccessGroup,
-		"roleIds":      input.RoleIDs,
 	}
+	if input.RoleIDs != nil {
+		vars["roleIds"] = input.RoleIDs
+	}
+	return vars
 }

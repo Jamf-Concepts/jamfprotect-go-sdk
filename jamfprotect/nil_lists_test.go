@@ -9,13 +9,20 @@ import (
 	"testing"
 )
 
-// optionalListVars are list variables the generated builders omit when the input slice is nil.
-var optionalListVars = map[string]bool{
-	"exceptionSets":            true,
-	"analyticSets":             true,
-	"unifiedLoggingFilterSets": true,
-	"tenantActions":            true,
-	"tags":                     true,
+// optionalLists maps an operation to the list variables its builder omits when the input slice is nil.
+var optionalLists = map[string][]string{
+	"CreateGroup":            {"roleIds"},
+	"UpdateGroup":            {"roleIds"},
+	"CreateUser":             {"roleIds", "groupIds"},
+	"UpdateUser":             {"roleIds", "groupIds"},
+	"CreateExceptionSet":     {"esExceptions"},
+	"UpdateExceptionSet":     {"esExceptions"},
+	"CreateAnalytic":         {"actions", "tenantActions"},
+	"UpdateAnalytic":         {"actions", "tenantActions"},
+	"UpdateInternalAnalytic": {"tenantActions"},
+	"CreateActionConfig":     {"clients"},
+	"UpdateActionConfig":     {"clients"},
+	"UpdateComputer":         {"tags"},
 }
 
 // listVarPattern matches GraphQL variable declarations with a list type.
@@ -23,6 +30,8 @@ var listVarPattern = regexp.MustCompile(`\$(\w+):\s*\[`)
 
 // TestZeroInputsSendEmptyLists checks that every list variable declared by a create or update
 // operation reaches the server as an empty array, never null, when the input slices are nil.
+// Variables listed in optionalLists must instead be omitted. ApiClient role IDs are deliberately
+// not optional: the server grants Full Admin to an API client created without them.
 func TestZeroInputsSendEmptyLists(t *testing.T) {
 	t.Parallel()
 
@@ -138,16 +147,22 @@ func TestZeroInputsSendEmptyLists(t *testing.T) {
 			if len(declared) == 0 {
 				t.Skip("operation declares no list variables")
 			}
+			optional := make(map[string]bool)
+			for _, k := range optionalLists[name] {
+				optional[k] = true
+			}
 			for _, m := range declared {
 				v, present := vars[m[1]]
-				if !present {
-					if !optionalListVars[m[1]] {
-						t.Errorf("list variable %q missing from request", m[1])
+				switch {
+				case optional[m[1]] && present:
+					t.Errorf("optional list variable %q = %#v, want omitted", m[1], v)
+				case optional[m[1]]:
+				case !present:
+					t.Errorf("list variable %q missing from request", m[1])
+				default:
+					if _, ok := v.([]any); !ok {
+						t.Errorf("list variable %q = %#v, want empty array", m[1], v)
 					}
-					continue
-				}
-				if _, ok := v.([]any); !ok {
-					t.Errorf("list variable %q = %#v, want empty array", m[1], v)
 				}
 			}
 		})
@@ -223,6 +238,55 @@ func TestNestedInputLists(t *testing.T) {
 			for _, k := range tt.absent {
 				if v, ok := container[k]; ok {
 					t.Errorf("%q = %#v, want omitted", k, v)
+				}
+			}
+		})
+	}
+}
+
+// TestOptionalListsSentWhenEmpty checks that an empty non-nil slice is sent as [] so it clears the field.
+func TestOptionalListsSentWhenEmpty(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		call func(*Client) error
+		keys []string
+	}{
+		{"UpdateGroup", func(c *Client) error { _, err := c.UpdateGroup(ctx, "id", GroupInput{RoleIDs: []string{}}); return err }, []string{"roleIds"}},
+		{"UpdateUser", func(c *Client) error {
+			_, err := c.UpdateUser(ctx, "id", UserInput{RoleIDs: []string{}, GroupIDs: []string{}})
+			return err
+		}, []string{"roleIds", "groupIds"}},
+		{"UpdateExceptionSet", func(c *Client) error {
+			_, err := c.UpdateExceptionSet(ctx, "id", ExceptionSetInput{EsExceptions: []EsExceptionInput{}})
+			return err
+		}, []string{"esExceptions"}},
+		{"UpdateAnalytic", func(c *Client) error {
+			_, err := c.UpdateAnalytic(ctx, "id", AnalyticInput{Actions: []string{}})
+			return err
+		}, []string{"actions"}},
+		{"UpdateActionConfig", func(c *Client) error {
+			_, err := c.UpdateActionConfig(ctx, "id", ActionConfigInput{Clients: []map[string]any{}})
+			return err
+		}, []string{"clients"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var vars map[string]any
+			_, c := testServer(t, func(_ *testing.T, req graphqlRequest) any {
+				vars = req.Variables
+				return map[string]any{}
+			})
+			if err := tt.call(c); err != nil {
+				t.Fatalf("call error: %v", err)
+			}
+			for _, k := range tt.keys {
+				if _, ok := vars[k].([]any); !ok {
+					t.Errorf("%q = %#v, want empty array", k, vars[k])
 				}
 			}
 		})

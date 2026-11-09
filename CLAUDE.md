@@ -89,6 +89,7 @@ All JSON handling uses `encoding/json/v2` and `encoding/json/jsontext` (Go 1.27+
 
 - Nullable input fields use `omitzero`, not `omitempty`. `omitempty` in v2 drops a pointer to `""`; `omitzero` drops only nil, and an empty non-nil slice is still sent as `[]`.
 - A nil slice or map marshals as `[]` or `{}`, not `null`. Inputs that need nil-vs-empty semantics must be guarded when building vars (see `PlanInput.UnifiedLoggingFilterSets`). The API rejects `null` for list inputs such as `roleIds` (`None is not of type 'array'`), so a nil slice now means "empty list" and replaces existing values on update. `nil_lists_test.go` pins this for every create/update operation.
+- Optional list inputs (`optionalInputFields` in `config.json`) are omitted when nil and sent as `[]` when empty: Group `roleIds`, User `roleIds`/`groupIds`, ExceptionSet `esExceptions`, Analytic `actions`, ActionConfig `clients`, plus the Plan lists. Omitting leaves the stored value unchanged on update. Do not add `ApiClient.RoleIDs`: the server grants Full Admin to an API client created without `roleIds`. `AnalyticSet.types` and non-null lists must always be sent.
 - Map keys are unordered unless `json.Deterministic(true)` is set. Request bodies and logged bodies use it.
 - Field matching is case-sensitive; duplicate keys and invalid UTF-8 are errors.
 - There is no `Decoder`/`Encoder`/`UseNumber`/`RawMessage`. Use `UnmarshalRead`/`MarshalWrite`, `jsontext.Value`, and the `jsontext.Decoder` walker in `internal/client/logging.go` for raw numbers.
