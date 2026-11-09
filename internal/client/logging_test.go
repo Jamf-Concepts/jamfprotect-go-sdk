@@ -118,7 +118,6 @@ func TestRedactBody_Unchanged(t *testing.T) {
 		`{"data":{"listPlans":{"items":[{"id":"1","name":"Default"}]}}}`,
 		`<html><body>Request blocked</body></html>`,
 		``,
-		`{"data":`,
 	} {
 		if got := string(redactBody([]byte(body))); got != body {
 			t.Errorf("expected body unchanged, got %q from %q", got, body)
@@ -240,5 +239,24 @@ func TestRedactBody_TrailingData(t *testing.T) {
 
 	if _, ok := decodeJSON([]byte(`{"a":1} {"b":2}`)); ok {
 		t.Error("decodeJSON accepted trailing data")
+	}
+}
+
+// TestRedactBody_StrictDecodeFailure checks that JSON-looking bodies v2 rejects are not logged raw.
+func TestRedactBody_StrictDecodeFailure(t *testing.T) {
+	t.Parallel()
+
+	for _, body := range []string{
+		`{"access_token":"s3cret","access_token":"x"}`,
+		"{\"access_token\":\"s3cret\",\"x\":\"\xff\"}",
+		`{"access_token":"s3cret"} {}`,
+		`{"data":`,
+	} {
+		if got := string(redactBody([]byte(body))); got != redactedValue {
+			t.Errorf("redactBody(%q) = %q, want %q", body, got, redactedValue)
+		}
+		if got := string(redactTokenResponseBody([]byte(body))); strings.Contains(got, "s3cret") {
+			t.Errorf("redactTokenResponseBody(%q) leaked the token: %q", body, got)
+		}
 	}
 }

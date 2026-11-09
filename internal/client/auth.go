@@ -218,6 +218,9 @@ func redactTokenRequestBody(clientID string) []byte {
 func redactTokenResponseBody(body []byte) []byte {
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
+		if looksLikeJSON(body) {
+			return []byte(redactedValue)
+		}
 		return body
 	}
 	if _, ok := payload["access_token"]; ok {
@@ -225,7 +228,7 @@ func redactTokenResponseBody(body []byte) []byte {
 	}
 	data, err := json.Marshal(payload, json.Deterministic(true))
 	if err != nil {
-		return body
+		return []byte(redactedValue)
 	}
 	return data
 }
