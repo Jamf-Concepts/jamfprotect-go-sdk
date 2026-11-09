@@ -273,7 +273,6 @@ func (c *Client) ListAnalytics(ctx context.Context) ([]Analytic, error) {
 
 func buildAnalyticVariables(input AnalyticInput) map[string]any {
 	vars := map[string]any{
-		"actions":         input.Actions,
 		"analyticActions": input.AnalyticActions,
 		"categories":      input.Categories,
 		"context":         input.Context,
@@ -285,6 +284,9 @@ func buildAnalyticVariables(input AnalyticInput) map[string]any {
 		"snapshotFiles":   input.SnapshotFiles,
 		"tags":            input.Tags,
 		"severity":        input.Severity,
+	}
+	if input.Actions != nil {
+		vars["actions"] = input.Actions
 	}
 	if input.LongDescription != "" {
 		vars["longDescription"] = input.LongDescription

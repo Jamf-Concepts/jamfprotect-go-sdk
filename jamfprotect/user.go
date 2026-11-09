@@ -217,13 +217,17 @@ func (c *Client) ListUsers(ctx context.Context) ([]User, error) {
 func buildUserVariables(input UserInput) map[string]any {
 	vars := map[string]any{
 		"connectionId":          input.ConnectionID,
-		"roleIds":               input.RoleIDs,
-		"groupIds":              input.GroupIDs,
 		"receiveEmailAlert":     input.ReceiveEmailAlert,
 		"emailAlertMinSeverity": input.EmailAlertMinSeverity,
 	}
 	if input.Email != "" {
 		vars["email"] = input.Email
+	}
+	if input.RoleIDs != nil {
+		vars["roleIds"] = input.RoleIDs
+	}
+	if input.GroupIDs != nil {
+		vars["groupIds"] = input.GroupIDs
 	}
 	return vars
 }
