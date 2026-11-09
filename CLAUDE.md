@@ -83,6 +83,16 @@ gofmt -s -w -e .         # Format
 golangci-lint run        # Lint
 ```
 
+## JSON
+
+All JSON handling uses `encoding/json/v2` and `encoding/json/jsontext` (Go 1.27+). Do not import `encoding/json` v1 or pass v1-compat options. Rules that follow from v2 semantics:
+
+- Nullable input fields use `omitzero`, not `omitempty`. `omitempty` in v2 drops a pointer to `""`; `omitzero` drops only nil, and an empty non-nil slice is still sent as `[]`.
+- A nil slice or map marshals as `[]` or `{}`, not `null`. Inputs that need nil-vs-empty semantics must be guarded when building vars (see `PlanInput.UnifiedLoggingFilterSets`). The API rejects `null` for list inputs such as `roleIds` (`None is not of type 'array'`), so a nil slice now means "empty list" and replaces existing values on update. `nil_lists_test.go` pins this for every create/update operation.
+- Map keys are unordered unless `json.Deterministic(true)` is set. Request bodies and logged bodies use it.
+- Field matching is case-sensitive; duplicate keys and invalid UTF-8 are errors.
+- There is no `Decoder`/`Encoder`/`UseNumber`/`RawMessage`. Use `UnmarshalRead`/`MarshalWrite`, `jsontext.Value`, and the `jsontext.Decoder` walker in `internal/client/logging.go` for raw numbers.
+
 ## Dependencies Policy
 
 Only use native Go and `golang.org/x` packages. Do not introduce third-party dependencies without discussion. Current transport dependencies: `hashicorp/go-retryablehttp`, `golang.org/x/sync`.

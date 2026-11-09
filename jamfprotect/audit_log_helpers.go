@@ -7,7 +7,8 @@ package jamfprotect
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 	"time"
@@ -55,7 +56,7 @@ func (c *Client) fetchAllAuditLogs(ctx context.Context, query string, baseVars m
 	maps.Copy(vars, baseVars)
 
 	for {
-		raw := make(map[string]json.RawMessage)
+		raw := make(map[string]jsontext.Value)
 		if err := c.transport.DoGraphQL(ctx, "/app", query, vars, &raw); err != nil {
 			return nil, err
 		}

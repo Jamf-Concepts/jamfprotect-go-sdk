@@ -6,7 +6,7 @@ package client
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"time"
@@ -207,7 +207,7 @@ func redactTokenRequestBody(clientID string) []byte {
 	data, err := json.Marshal(map[string]string{
 		"client_id": clientID,
 		"password":  "[REDACTED]",
-	})
+	}, json.Deterministic(true))
 	if err != nil {
 		return []byte(`{"password":"[REDACTED]"}`)
 	}
@@ -223,7 +223,7 @@ func redactTokenResponseBody(body []byte) []byte {
 	if _, ok := payload["access_token"]; ok {
 		payload["access_token"] = "[REDACTED]"
 	}
-	data, err := json.Marshal(payload)
+	data, err := json.Marshal(payload, json.Deterministic(true))
 	if err != nil {
 		return body
 	}

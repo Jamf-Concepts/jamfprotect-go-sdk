@@ -6,7 +6,8 @@ package client
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 )
@@ -75,7 +76,7 @@ func ListAll[T any](
 			vars["nextToken"] = *nextToken
 		}
 
-		raw := make(map[string]json.RawMessage)
+		raw := make(map[string]jsontext.Value)
 		if err := c.DoGraphQL(ctx, endpoint, query, vars, &raw); err != nil {
 			return nil, err
 		}

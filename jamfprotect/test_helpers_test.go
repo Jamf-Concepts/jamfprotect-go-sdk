@@ -4,7 +4,7 @@
 package jamfprotect
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,7 +23,7 @@ func testServer(t *testing.T, graphqlHandler func(t *testing.T, req graphqlReque
 	mux := http.NewServeMux()
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]any{
+		if err := json.MarshalWrite(w, map[string]any{
 			"access_token": "test-token",
 			"expires_in":   3600,
 		}); err != nil {
@@ -32,13 +32,13 @@ func testServer(t *testing.T, graphqlHandler func(t *testing.T, req graphqlReque
 	})
 	graphqlEndpoint := func(w http.ResponseWriter, r *http.Request) {
 		var req graphqlRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.UnmarshalRead(r.Body, &req); err != nil {
 			t.Fatalf("decoding graphql request: %v", err)
 		}
 
 		data := graphqlHandler(t, req)
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]any{"data": data}); err != nil {
+		if err := json.MarshalWrite(w, map[string]any{"data": data}); err != nil {
 			t.Fatalf("encoding graphql response: %v", err)
 		}
 	}
@@ -62,7 +62,7 @@ func testServerError(t *testing.T, message string) (*httptest.Server, *Client) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]any{
+		if err := json.MarshalWrite(w, map[string]any{
 			"access_token": "test-token",
 			"expires_in":   3600,
 		}); err != nil {
@@ -71,7 +71,7 @@ func testServerError(t *testing.T, message string) (*httptest.Server, *Client) {
 	})
 	errorEndpoint := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]any{
+		if err := json.MarshalWrite(w, map[string]any{
 			"data":   nil,
 			"errors": []map[string]any{{"message": message}},
 		}); err != nil {

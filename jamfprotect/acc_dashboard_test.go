@@ -5,7 +5,8 @@ package jamfprotect
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"testing"
 )
 
@@ -17,7 +18,7 @@ func TestAcc_GetCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCount: %v", err)
 	}
-	b, _ := json.MarshalIndent(counts, "", "  ")
+	b, _ := json.Marshal(counts, jsontext.WithIndent("  "))
 	t.Logf("GetCount:\n%s", b)
 }
 

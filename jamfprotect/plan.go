@@ -170,7 +170,7 @@ type PlanAnalyticSetInput struct {
 
 // PlanInfoSyncInput is a nested input type.
 type PlanInfoSyncInput struct {
-	InfoSyncInterval     *int64   `json:"infoSyncInterval,omitempty"`
+	InfoSyncInterval     *int64   `json:"infoSyncInterval,omitzero"`
 	InsightsSyncInterval int64    `json:"insightsSyncInterval"`
 	Attrs                []string `json:"attrs"`
 }

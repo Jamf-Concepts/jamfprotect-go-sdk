@@ -6,7 +6,7 @@ package client
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"os"

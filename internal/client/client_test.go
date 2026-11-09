@@ -5,7 +5,7 @@ package client
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -20,7 +20,7 @@ import (
 // testEncodeJSON is a helper to handle JSON encoding in tests.
 func testEncodeJSON(t *testing.T, w http.ResponseWriter, v any) {
 	t.Helper()
-	if err := json.NewEncoder(w).Encode(v); err != nil {
+	if err := json.MarshalWrite(w, v); err != nil {
 		t.Fatalf("failed to encode JSON: %v", err)
 	}
 }
@@ -36,7 +36,7 @@ func testWrite(t *testing.T, w http.ResponseWriter, data []byte) {
 // testDecodeJSON is a helper to handle JSON decoding in tests.
 func testDecodeJSON(t *testing.T, r *http.Request, v any) {
 	t.Helper()
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	if err := json.UnmarshalRead(r.Body, v); err != nil {
 		t.Fatalf("failed to decode JSON: %v", err)
 	}
 }
