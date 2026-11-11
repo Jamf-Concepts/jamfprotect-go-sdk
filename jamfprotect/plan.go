@@ -82,6 +82,10 @@ fragment PlanFields on Plan {
 		uuid
 		name
 	}
+	preventListSets {
+		uuid
+		name
+	}
 }
 `
 
@@ -150,6 +154,7 @@ type PlanInput struct {
 	ExceptionSets            []string
 	AnalyticSets             []PlanAnalyticSetInput
 	UnifiedLoggingFilterSets []string
+	PreventListSets          []string
 	Telemetry                *string
 	TelemetryV2              *string
 	TelemetryV2Null          bool
@@ -268,6 +273,12 @@ type PlanUnifiedLoggingFilterSet struct {
 	Name string `json:"name"`
 }
 
+// PlanPreventListSet contains PreventListSet data.
+type PlanPreventListSet struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
 // PlanAnalyticSetRef contains AnalyticSet data.
 type PlanAnalyticSetRef struct {
 	UUID      string         `json:"uuid"`
@@ -306,6 +317,7 @@ type Plan struct {
 	TelemetryV2              *PlanRef                      `json:"telemetryV2"`
 	AnalyticSets             []PlanAnalyticSet             `json:"analyticSets"`
 	UnifiedLoggingFilterSets []PlanUnifiedLoggingFilterSet `json:"unifiedLoggingFilterSets"`
+	PreventListSets          []PlanPreventListSet          `json:"preventListSets"`
 }
 
 // ── Client methods ────────────────────────────────────────────────────────────
@@ -405,6 +417,9 @@ func buildPlanVariables(input PlanInput) map[string]any {
 	}
 	if input.UnifiedLoggingFilterSets != nil {
 		vars["unifiedLoggingFilterSets"] = input.UnifiedLoggingFilterSets
+	}
+	if input.PreventListSets != nil {
+		vars["preventListSets"] = input.PreventListSets
 	}
 	if input.Telemetry != nil {
 		vars["telemetry"] = *input.Telemetry

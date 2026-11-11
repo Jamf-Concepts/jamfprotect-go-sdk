@@ -194,24 +194,63 @@
       ]
     },
     {
+      "file": "prevent_list_set.go",
+      "typeName": "PreventListSet",
+      "idField": "uuid",
+      "fields": ["uuid", "name", "description", "created", "updated", "preventLists", "plans"],
+      "nestedTypes": [
+        {
+          "schemaName": "PreventList",
+          "goName": "PreventListSetList",
+          "fields": ["id", "name"]
+        },
+        {
+          "schemaName": "Plan",
+          "goName": "PreventListSetPlan",
+          "fields": ["id", "name"]
+        }
+      ],
+      "operations": [
+        {"name": "GetPreventListSet", "gqlName": "getPreventListSet", "kind": "get", "endpoint": "/app"},
+        {"name": "CreatePreventListSet", "gqlName": "createPreventListSet", "kind": "create", "endpoint": "/app", "inputType": "PreventListSetInput"},
+        {"name": "UpdatePreventListSet", "gqlName": "updatePreventListSet", "kind": "update", "endpoint": "/app", "inputType": "PreventListSetInput"},
+        {"name": "DeletePreventListSet", "gqlName": "deletePreventListSet", "kind": "delete", "endpoint": "/app"},
+        {
+          "name": "ListPreventListSets",
+          "gqlName": "listPreventListSets",
+          "kind": "list",
+          "endpoint": "/app",
+          "pagination": true,
+          "paginationVars": {"direction": "ASC", "field": "name", "filter": {}, "pageSize": 100}
+        }
+      ]
+    },
+    {
       "file": "custom_prevent_list.go",
       "typeName": "CustomPreventList",
       "gqlTypeName": "PreventList",
-      "fields": ["id", "name", "description", "type", "tags", "list", "count", "created"],
+      "fields": ["id", "name", "description", "type", "tags", "list", "count", "created", "sets"],
+      "nestedTypes": [
+        {
+          "schemaName": "PreventListSet",
+          "goName": "CustomPreventListSetRef",
+          "fields": ["uuid", "name"]
+        }
+      ],
       "inputFields": ["name", "description", "type", "tags", "list"],
       "operations": [
         {
           "name": "GetCustomPreventList",
           "gqlName": "getPreventList",
           "kind": "get",
-          "endpoint": "/graphql",
+          "endpoint": "/app",
           "resultKey": "getPreventList"
         },
         {
           "name": "CreateCustomPreventList",
           "gqlName": "createPreventList",
           "kind": "create",
-          "endpoint": "/graphql",
+          "endpoint": "/app",
           "resultKey": "createPreventList",
           "inputType": "PreventListInput",
           "inputTypeGoName": "CustomPreventListInput"
@@ -220,7 +259,7 @@
           "name": "UpdateCustomPreventList",
           "gqlName": "updatePreventList",
           "kind": "update",
-          "endpoint": "/graphql",
+          "endpoint": "/app",
           "resultKey": "updatePreventList",
           "inputType": "PreventListInput",
           "inputTypeGoName": "CustomPreventListInput"
@@ -229,14 +268,14 @@
           "name": "DeleteCustomPreventList",
           "gqlName": "deletePreventList",
           "kind": "delete",
-          "endpoint": "/graphql",
+          "endpoint": "/app",
           "resultKey": "deletePreventList"
         },
         {
           "name": "ListCustomPreventLists",
           "gqlName": "listPreventLists",
           "kind": "list",
-          "endpoint": "/graphql",
+          "endpoint": "/app",
           "resultKey": "listPreventLists",
           "pagination": true,
           "paginationVars": {
@@ -1387,7 +1426,7 @@
     {
       "file": "plan.go",
       "typeName": "Plan",
-      "fields": ["id","uuid","hash","name","description","created","updated","logLevel","profileVersion","autoUpdate","threatPreventionStrategy","customEngineConfig","commsConfig","infoSync","signaturesFeedConfig","actionConfigs","exceptionSets","usbControlSet","telemetry","telemetryV2","analyticSets","unifiedLoggingFilterSets"],
+      "fields": ["id","uuid","hash","name","description","created","updated","logLevel","profileVersion","autoUpdate","threatPreventionStrategy","customEngineConfig","commsConfig","infoSync","signaturesFeedConfig","actionConfigs","exceptionSets","usbControlSet","telemetry","telemetryV2","analyticSets","unifiedLoggingFilterSets","preventListSets"],
       "nestedTypes": [
         {"schemaName": "CommsConfig", "goName": "PlanCommsConfig"},
         {"schemaName": "infoSync", "goName": "PlanInfoSync", "fields": ["attrs", "insightsSyncInterval"]},
@@ -1399,7 +1438,8 @@
         {"schemaName": "TelemetryV2", "goName": "PlanRef", "fields": ["id","name"], "path": "telemetryV2"},
         {"schemaName": "Analytic", "goName": "PlanAnalytic", "fields": ["uuid","categories"], "path": "analyticSets.analyticSet.analytics"},
         {"schemaName": "AnalyticSet", "goName": "PlanAnalyticSetRef", "fields": ["uuid","name","managed","analytics"], "path": "analyticSets.analyticSet"},
-        {"schemaName": "UnifiedLoggingFilterSet", "goName": "PlanUnifiedLoggingFilterSet", "fields": ["uuid","name"], "path": "unifiedLoggingFilterSets"}
+        {"schemaName": "UnifiedLoggingFilterSet", "goName": "PlanUnifiedLoggingFilterSet", "fields": ["uuid","name"], "path": "unifiedLoggingFilterSets"},
+        {"schemaName": "PreventListSet", "goName": "PlanPreventListSet", "fields": ["uuid","name"], "path": "preventListSets"}
       ],
       "inputTypeRenames": {
         "CommsConfigInput": "PlanCommsConfigInput",
@@ -1415,7 +1455,7 @@
         }
       },
       "nullableInputFields": ["logLevel","telemetry","telemetryV2","usbControlSet","customEngineConfig","configVersion"],
-      "optionalInputFields": ["logLevel","exceptionSets","telemetry","telemetryV2","analyticSets","unifiedLoggingFilterSets","usbControlSet","threatPreventionStrategy","customEngineConfig","configVersion"],
+      "optionalInputFields": ["logLevel","exceptionSets","telemetry","telemetryV2","analyticSets","unifiedLoggingFilterSets","preventListSets","usbControlSet","threatPreventionStrategy","customEngineConfig","configVersion"],
       "explicitNullInputFields": ["telemetryV2"],
       "nullableNestedInputFields": {"InfoSyncInput": ["infoSyncInterval"]},
       "operations": [

@@ -24,6 +24,10 @@ fragment CustomPreventListFields on PreventList {
 	list
 	count
 	created
+	sets {
+		uuid
+		name
+	}
 }
 `
 
@@ -93,16 +97,23 @@ type CustomPreventListInput struct {
 
 // ── Response types ────────────────────────────────────────────────────────────
 
+// CustomPreventListSetRef contains PreventListSet data.
+type CustomPreventListSetRef struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
 // CustomPreventList represents a Jamf Protect customPreventList.
 type CustomPreventList struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Type        string   `json:"type"`
-	Tags        []string `json:"tags"`
-	List        []string `json:"list"`
-	Count       int64    `json:"count"`
-	Created     string   `json:"created"`
+	ID          string                    `json:"id"`
+	Name        string                    `json:"name"`
+	Description string                    `json:"description"`
+	Type        string                    `json:"type"`
+	Tags        []string                  `json:"tags"`
+	List        []string                  `json:"list"`
+	Count       int64                     `json:"count"`
+	Created     string                    `json:"created"`
+	Sets        []CustomPreventListSetRef `json:"sets"`
 }
 
 // ── Client methods ────────────────────────────────────────────────────────────
@@ -113,7 +124,7 @@ func (c *Client) GetCustomPreventList(ctx context.Context, id string) (*CustomPr
 	var result struct {
 		GetCustomPreventList *CustomPreventList `json:"getPreventList"`
 	}
-	if err := c.transport.DoGraphQL(ctx, "/graphql", getCustomPreventListQuery, vars, &result); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", getCustomPreventListQuery, vars, &result); err != nil {
 		return nil, fmt.Errorf("GetCustomPreventList(%s): %w", id, err)
 	}
 	return result.GetCustomPreventList, nil
@@ -125,7 +136,7 @@ func (c *Client) CreateCustomPreventList(ctx context.Context, input CustomPreven
 	var result struct {
 		CreateCustomPreventList CustomPreventList `json:"createPreventList"`
 	}
-	if err := c.transport.DoGraphQL(ctx, "/graphql", createCustomPreventListMutation, vars, &result); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", createCustomPreventListMutation, vars, &result); err != nil {
 		return CustomPreventList{}, fmt.Errorf("CreateCustomPreventList: %w", err)
 	}
 	return result.CreateCustomPreventList, nil
@@ -138,7 +149,7 @@ func (c *Client) UpdateCustomPreventList(ctx context.Context, id string, input C
 	var result struct {
 		UpdateCustomPreventList CustomPreventList `json:"updatePreventList"`
 	}
-	if err := c.transport.DoGraphQL(ctx, "/graphql", updateCustomPreventListMutation, vars, &result); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", updateCustomPreventListMutation, vars, &result); err != nil {
 		return CustomPreventList{}, fmt.Errorf("UpdateCustomPreventList(%s): %w", id, err)
 	}
 	return result.UpdateCustomPreventList, nil
@@ -147,7 +158,7 @@ func (c *Client) UpdateCustomPreventList(ctx context.Context, id string, input C
 // DeleteCustomPreventList deletes a customPreventList by ID.
 func (c *Client) DeleteCustomPreventList(ctx context.Context, id string) error {
 	vars := map[string]any{"id": id}
-	if err := c.transport.DoGraphQL(ctx, "/graphql", deleteCustomPreventListMutation, vars, nil); err != nil {
+	if err := c.transport.DoGraphQL(ctx, "/app", deleteCustomPreventListMutation, vars, nil); err != nil {
 		return fmt.Errorf("DeleteCustomPreventList(%s): %w", id, err)
 	}
 	return nil
@@ -155,7 +166,7 @@ func (c *Client) DeleteCustomPreventList(ctx context.Context, id string) error {
 
 // ListCustomPreventLists retrieves all customPreventLists.
 func (c *Client) ListCustomPreventLists(ctx context.Context) ([]CustomPreventList, error) {
-	customPreventLists, err := client.ListAll[CustomPreventList](ctx, c.transport, "/graphql", listCustomPreventListsQuery, map[string]any{
+	customPreventLists, err := client.ListAll[CustomPreventList](ctx, c.transport, "/app", listCustomPreventListsQuery, map[string]any{
 		"direction": "DESC",
 		"field":     "created",
 		"filter":    map[string]any{},

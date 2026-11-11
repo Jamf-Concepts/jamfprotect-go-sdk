@@ -119,6 +119,14 @@ func TestZeroInputsSendEmptyLists(t *testing.T) {
 			_, err := c.UpdateUnifiedLoggingFilterSet(context.Background(), "id", UnifiedLoggingFilterSetInput{})
 			return err
 		},
+		"CreatePreventListSet": func(c *Client) error {
+			_, err := c.CreatePreventListSet(context.Background(), PreventListSetInput{})
+			return err
+		},
+		"UpdatePreventListSet": func(c *Client) error {
+			_, err := c.UpdatePreventListSet(context.Background(), "id", PreventListSetInput{})
+			return err
+		},
 		"CreateUnifiedLoggingFilter": func(c *Client) error {
 			_, err := c.CreateUnifiedLoggingFilter(context.Background(), UnifiedLoggingFilterInput{})
 			return err
@@ -199,7 +207,7 @@ func TestNestedInputLists(t *testing.T) {
 		{
 			name:   "CreatePlan nil lists",
 			call:   func(c *Client) error { _, err := c.CreatePlan(context.Background(), PlanInput{}); return err },
-			absent: []string{"exceptionSets", "analyticSets", "unifiedLoggingFilterSets"},
+			absent: []string{"exceptionSets", "analyticSets", "unifiedLoggingFilterSets", "preventListSets"},
 		},
 		{
 			name: "UpdatePlan empty lists",
@@ -208,10 +216,11 @@ func TestNestedInputLists(t *testing.T) {
 					ExceptionSets:            empty,
 					AnalyticSets:             []PlanAnalyticSetInput{},
 					UnifiedLoggingFilterSets: empty,
+					PreventListSets:          empty,
 				})
 				return err
 			},
-			present: []string{"exceptionSets", "analyticSets", "unifiedLoggingFilterSets"},
+			present: []string{"exceptionSets", "analyticSets", "unifiedLoggingFilterSets", "preventListSets"},
 		},
 	}
 	for _, tt := range tests {

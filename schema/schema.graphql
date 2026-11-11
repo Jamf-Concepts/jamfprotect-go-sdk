@@ -1053,6 +1053,7 @@ type Plan {
 	autoUpdate: Boolean
 	analyticSets: [PlanAnalyticSet!]
 	unifiedLoggingFilterSets: [UnifiedLoggingFilterSet!]
+	preventListSets: [PreventListSet!]
 	infoSync: infoSync
 	commsConfig: CommsConfig
 	signaturesFeedConfig: SignaturesFeedConfig
@@ -1094,6 +1095,7 @@ input PlanInput {
 	exceptionSets: [ID!]
 	analyticSets: [PlanAnalyticSetInput!]
 	unifiedLoggingFilterSets: [ID!]
+	preventListSets: [ID!]
 	telemetry: ID
 	telemetryV2: ID
 	autoUpdate: Boolean
@@ -1136,6 +1138,7 @@ type PreventList {
 	list: [String]
 	count: Int
 	description: String
+	sets: [PreventListSet!]
 }
 type PreventListConnection {
 	items: [PreventList]
@@ -1171,6 +1174,47 @@ input PreventListQueryInput {
 	order: PreventListOrderInput
 	pageSize: Int
 	filter: PreventListFilterInput
+}
+type PreventListSet {
+	uuid: ID!
+	name: String!
+	description: String
+	preventLists: [PreventList!]
+	plans: [Plan!]
+	created: AWSDateTime!
+	updated: AWSDateTime!
+}
+type PreventListSetConnection {
+	items: [PreventListSet]
+	pageInfo: PageInfo
+}
+input PreventListSetFiltersInput {
+	name: TableStringFilterInput
+	description: TableStringFilterInput
+	created: TableDatetimeFilterInput
+	updated: TableDatetimeFilterInput
+	or: [PreventListSetFiltersInput!]
+	and: [PreventListSetFiltersInput!]
+}
+input PreventListSetInput {
+	name: String!
+	description: String
+	preventLists: [ID!]!
+}
+enum PreventListSetOrderField {
+	name
+	created
+	updated
+}
+input PreventListSetOrderInput {
+	direction: OrderDirection!
+	field: PreventListSetOrderField!
+}
+input PreventListSetsQueryInput {
+	next: String
+	order: PreventListSetOrderInput
+	filter: PreventListSetFiltersInput
+	pageSize: Int
 }
 type ProductRule implements USBControlRule {
 	mountAction: USBCONTROL_MOUNT_ACTION_TYPE_ENUM!
@@ -1721,6 +1765,7 @@ type Mutation {
 	createGroup(input: GroupCreateInput!): Group
 	createPlan(input: PlanInput!): Plan
 	createPreventList(input: PreventListInput!): PreventList
+	createPreventListSet(input: PreventListSetInput!): PreventListSet
 	createRole(input: RoleInput!): Role
 	createTelemetryV2(input: TelemetryInputV2!): TelemetryV2
 	createUSBControlSet(input: USBControlSetInput!): USBControlSet
@@ -1736,6 +1781,7 @@ type Mutation {
 	deleteGroup(id: ID!): Group
 	deletePlan(id: ID!): Plan
 	deletePreventList(id: ID!): PreventList
+	deletePreventListSet(uuid: ID!): PreventListSet
 	deleteRole(id: ID!): Role
 	deleteTelemetryV2(id: ID!): TelemetryV2
 	deleteUSBControlSet(id: ID!): USBControlSet
@@ -1759,6 +1805,7 @@ type Mutation {
 	updateOrganizationRetention(input: OrganizationRetentionInput!): Organization
 	updatePlan(id: ID!, input: PlanInput!): Plan
 	updatePreventList(input: PreventListInput!, id: ID!): PreventList
+	updatePreventListSet(uuid: ID!, input: PreventListSetInput!): PreventListSet
 	updateRole(id: ID!, input: RoleInput!): Role
 	updateTelemetryV2(id: ID!, input: TelemetryInputV2!): TelemetryV2
 	updateUSBControlSet(id: ID!, input: USBControlSetInput!): USBControlSet
@@ -1785,6 +1832,7 @@ type Query {
 	getPlan(id: ID!): Plan
 	getPlansConfigProfile(id: ID!, input: ProfileOptionsInput): String
 	getPreventList(id: ID!): PreventList
+	getPreventListSet(uuid: ID!): PreventListSet
 	getRole(id: ID!): Role
 	getTelemetryV2(id: ID!): TelemetryV2
 	getUSBControlSet(id: ID!): USBControlSet
@@ -1804,6 +1852,7 @@ type Query {
 	listInsightComputers(uuid: ID!, input: ComputerQueryInput): ComputerConnection
 	listInsights: [Insight]
 	listPlans(input: PlanQueryInput): PlanConnection
+	listPreventListSets(input: PreventListSetsQueryInput): PreventListSetConnection
 	listPreventLists(input: PreventListQueryInput): PreventListConnection
 	listRiskiestComputers(input: RiskyComputersInput): RiskyComputerConnection
 	listRoles(input: RoleQueryInput): RoleConnection
