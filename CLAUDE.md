@@ -121,7 +121,7 @@ Each resource file contains GraphQL queries/mutations as constants, Go types for
 
 ### Resource Coverage
 
-**Full CRUD:** ActionConfig, Analytic, AnalyticSet, ApiClient, CustomPreventList, ExceptionSet, Group, Plan, RemovableStorageControlSet, Role, TelemetryV2, UnifiedLoggingFilter, UnifiedLoggingFilterSet, User
+**Full CRUD:** ActionConfig, Analytic, AnalyticSet, ApiClient, CustomPreventList, ExceptionSet, Group, Plan, PreventListSet, RemovableStorageControlSet, Role, TelemetryV2, UnifiedLoggingFilter, UnifiedLoggingFilterSet, User
 
 **Read + Write (partial):** Computer (list, get, update, delete, setComputerPlan), Connection (list-only), DataForwarding (get/update), DataRetention (get/update), ChangeManagement (get/update), Downloads (get-only)
 
@@ -134,6 +134,16 @@ Each resource file contains GraphQL queries/mutations as constants, Go types for
 **Auth:** GetCurrentPermissions (RBAC introspection)
 
 **Dashboard:** GetCount (aggregated computer/alert/insight counts), GetComputerCount, ListRiskiestComputers (limit, createdInterval). `GetCount` must pass `{or: []}` match-all filters per `CountQueryInput` field — `{}` or `null` make the server return null counts.
+
+### Prevent List Sets
+
+Custom prevent lists are grouped into Prevent List Sets, and a list only reaches endpoints on the Plans its sets are assigned to. A list created without a set reaches no endpoint. `PlanInput.PreventListSets` is nil-sensitive like the unified logging filter sets (`nil` omits, empty non-nil clears). Custom prevent list operations moved from `/graphql` to `/app` because `PreventList.sets` selects the set relationship.
+
+Server-side behaviour worth knowing:
+
+- Unknown list IDs in a set, and unknown set UUIDs in a Plan, are rejected (`InputValidationError`), unlike unified logging filter sets.
+- Deleting a set assigned to a Plan is rejected. Detach it from every Plan first.
+- Deleting a list that belongs to a set succeeds and drops it from the set.
 
 ### Unified Logging Filter Sets
 
