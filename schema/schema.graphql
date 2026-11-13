@@ -1516,6 +1516,10 @@ enum ThreatPreventionStrategy {
 	MANAGED
 	CUSTOM_ENGINES
 }
+type ThreatPreventionVersion {
+	id: ID
+	created: AWSDateTime
+}
 enum UNIFIED_LOGGING_LEVEL {
 	DEFAULT
 	INFO
@@ -1857,6 +1861,7 @@ type Query {
 	listRiskiestComputers(input: RiskyComputersInput): RiskyComputerConnection
 	listRoles(input: RoleQueryInput): RoleConnection
 	listTelemetriesV2(input: TelemetryQueryInput): TelemetryConnectionV2
+	listThreatPreventionVersions: [ThreatPreventionVersion]
 	listUSBControlSets(input: USBControlSetsQueryInput): USBControlSetConnection
 	listUnifiedLoggingFilterSets(input: UnifiedLoggingFilterSetsQueryInput): UnifiedLoggingFilterSetConnection
 	listUnifiedLoggingFilters(input: UnifiedLoggingFiltersListQueryInput): UnifiedLoggingFilterConnection

@@ -1578,6 +1578,21 @@
           ]
         }
       ]
+    },
+    {
+      "file": "threat_prevention_version.go",
+      "typeName": "ThreatPreventionVersion",
+      "idField": "id",
+      "fields": ["id", "created"],
+      "operations": [
+        {
+          "name": "ListThreatPreventionVersions",
+          "gqlName": "listThreatPreventionVersions",
+          "kind": "list_simple",
+          "endpoint": "/app",
+          "resultKey": "listThreatPreventionVersions"
+        }
+      ]
     }
   ],
   "statics": [

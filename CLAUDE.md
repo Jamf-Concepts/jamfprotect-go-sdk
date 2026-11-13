@@ -129,6 +129,8 @@ Each resource file contains GraphQL queries/mutations as constants, Go types for
 
 **Insights/Compliance:** ListInsights, UpdateInsightStatus, ListInsightComputers, GetFleetComplianceScore
 
+**Threat Prevention:** ListThreatPreventionVersions (non-paginated)
+
 **Audit Logs:** ListAuditLogsByDate (2-day max sliding window), ListAuditLogsByUser, ListAuditLogsByOp
 
 **Auth:** GetCurrentPermissions (RBAC introspection)
