@@ -53,6 +53,22 @@ func TestAcc_Connections_List(t *testing.T) {
 	}
 }
 
+func TestAcc_ThreatPreventionVersions_List(t *testing.T) {
+	client := accClient(t)
+	ctx := context.Background()
+
+	versions, err := client.ListThreatPreventionVersions(ctx)
+	if err != nil {
+		t.Fatalf("ListThreatPreventionVersions: %v", err)
+	}
+	if len(versions) == 0 {
+		t.Fatal("ListThreatPreventionVersions: expected at least one version")
+	}
+	if versions[0].ID == "" {
+		t.Fatal("ListThreatPreventionVersions: expected non-empty ID")
+	}
+}
+
 func TestAcc_Computers_List(t *testing.T) {
 	client := accClient(t)
 	ctx := context.Background()
